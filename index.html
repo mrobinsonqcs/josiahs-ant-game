@@ -659,7 +659,7 @@ function panCam(dx,dy){ const r=camRight(),f=camFwd(),k=camCfg.dist*0.0016;
 const keys={};
 window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true; if(e.key==='Escape')setBuild(null);});
 window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
-function keyPan(dt){ let dx=0,dz=0; if(keys['a']||keys['arrowleft'])dx-=1; if(keys['d']||keys['arrowright'])dx+=1; if(keys['w']||keys['arrowup'])dz-=1; if(keys['s']||keys['arrowdown'])dz+=1;
+function keyPan(dt){ let dx=0,dz=0; if(keys['a']||keys['arrowleft'])dx-=1; if(keys['d']||keys['arrowright'])dx+=1; if(keys['w'])dz-=1; if(keys['arrowup'])dz+=1; if(keys['s'])dz+=1; if(keys['arrowdown'])dz-=1;
   if(dx||dz){ const r=camRight(),f=camFwd(),k=camCfg.dist*1.4*dt; camCfg.tx=clamp(camCfg.tx+(r.x*dx-f.x*dz)*k,-BOUND,BOUND); camCfg.tz=clamp(camCfg.tz+(r.z*dx-f.z*dz)*k,-BOUND,BOUND);} }
 
 // ---------- selection ----------
