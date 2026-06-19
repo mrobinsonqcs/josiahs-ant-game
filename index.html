@@ -78,7 +78,7 @@ body{background:#0e0a06;font-family:'Nunito',sans-serif;color:#f0d9a8;overflow:h
     <button class="b" id="sel-sol">Select all soldiers</button>
     <span id="ticker">Tap an ant to select it, then tap where to send it...</span>
   </div>
-  <div id="legend">Tap an ant to grab its group · drag on the ground to box-select · tap <b>food</b> to gather, <b>brush</b> to clear for sand, an <b>enemy</b> to attack, the <b>rival</b> to raid · tap your <b>nursery</b> or <b>barracks</b> to send an egg there to hatch · two-finger or right-drag (or arrow keys) to pan · pick a build then tap the glowing grid to place it</div>
+  <div id="legend">Click <b>food</b>, <b>brush</b>, <b>enemy</b>, or <b>rival</b> — nearest free ant dispatches automatically · tap an ant to grab its group · drag on ground to box-select a group · tap <b>nursery</b> or <b>barracks</b> to route eggs · two-finger or right-drag (or arrow keys) to pan · pick a build then tap the glowing grid to place it</div>
 </div>
 
 <script>
@@ -207,19 +207,27 @@ function buildEnemy(){
 function buildStruct(kind){
   const g=new THREE.Group(); let pick;
   if(kind==='nursery'){
-    const base=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0xcaa23a,roughness:.7}));base.scale.set(9,7,9);base.position.y=3.5;base.castShadow=true;g.add(base);
-    const roof=new THREE.Mesh(G_cone,new THREE.MeshStandardMaterial({color:0xe0b85a}));roof.scale.set(11,8,11);roof.position.y=10;roof.castShadow=true;g.add(roof);
-    for(let i=0;i<3;i++){const e=new THREE.Mesh(G_,M.egg);e.scale.set(1.1,1.5,1.1);e.position.set(rnd(-3,3),1.5,rnd(2,6));g.add(e);}
-    pick=base;
+    const mat1=new THREE.MeshStandardMaterial({color:0xc87820,roughness:.4,emissive:0x6a3800,emissiveIntensity:0.3});
+    const main=new THREE.Mesh(G_,mat1);main.scale.set(10,9,10);main.position.y=8;main.castShadow=true;g.add(main);
+    const mat2=new THREE.MeshStandardMaterial({color:0xa86018,roughness:.55});
+    const bumps=[[8,4,2,6,5,6],[-7,3,-3,5,4,5],[2,3,9,6,5,6],[-3,3,-9,5,4,5]];
+    for(const[ox,oy,oz,sx,sy,sz]of bumps){const s=new THREE.Mesh(G_,mat2);s.scale.set(sx,sy,sz);s.position.set(ox,oy,oz);s.castShadow=true;g.add(s);}
+    const glow=new THREE.PointLight(0xffaa30,1.4,80,2);glow.position.set(0,6,0);g.add(glow);
+    for(let i=0;i<6;i++){const ang=(i/6)*Math.PI*2;const e=new THREE.Mesh(G_,M.egg);e.scale.set(1.2,1.8,1.2);e.position.set(Math.cos(ang)*8,1.5,Math.sin(ang)*8);g.add(e);}
+    pick=main;
   } else if(kind==='barracks'){
     const base=new THREE.Mesh(G_box,new THREE.MeshStandardMaterial({color:0x9a3a24,roughness:.6}));base.scale.set(18,9,16);base.position.y=4.5;base.castShadow=true;g.add(base);
     for(const sx of[-1,1])for(const sz of[-1,1]){const t=new THREE.Mesh(G_box,new THREE.MeshStandardMaterial({color:0x7e2615}));t.scale.set(3,13,3);t.position.set(sx*8,6.5,sz*7);t.castShadow=true;g.add(t);}
     const flag=new THREE.Mesh(new THREE.PlaneGeometry(6,4),new THREE.MeshStandardMaterial({color:0xcf3f24,side:THREE.DoubleSide}));flag.position.set(0,16,0);g.add(flag);
     pick=base;
   } else if(kind==='store'){
-    const dome=new THREE.Mesh(G_,new THREE.MeshStandardMaterial({color:0x5a9e3a,roughness:.6}));dome.scale.set(10,8,10);dome.position.y=2;dome.castShadow=true;g.add(dome);
-    for(let i=0;i<5;i++){const l=new THREE.Mesh(G_,M.leaf);l.scale.set(2,1.3,2.4);l.position.set(rnd(-5,5),rnd(6,10),rnd(-5,5));g.add(l);}
-    pick=dome;
+    const mat1=new THREE.MeshStandardMaterial({color:0x7a4e22,roughness:.75});
+    const body=new THREE.Mesh(G_,mat1);body.scale.set(12,7,12);body.position.y=5;body.castShadow=true;g.add(body);
+    const base=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x5c3a14,roughness:.9}));base.scale.set(13,2,13);base.position.y=1;g.add(base);
+    const inner=new THREE.Mesh(G_,new THREE.MeshBasicMaterial({color:0x1a0c04}));inner.scale.set(7,5,7);inner.position.y=9;g.add(inner);
+    const bcols=[0xcc4422,0x994420,0xdd7730,0x886618,0x774422];
+    for(let i=0;i<10;i++){const ang=rnd(0,Math.PI*2),r=rnd(7,12),y=rnd(1,8);const b=new THREE.Mesh(G_,new THREE.MeshStandardMaterial({color:bcols[i%5],roughness:.5}));b.scale.setScalar(rnd(0.9,1.8));b.position.set(Math.cos(ang)*r,y,Math.sin(ang)*r);g.add(b);}
+    pick=body;
   } else if(kind==='fungus'){
     const pad=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x2a3a2a}));pad.scale.set(11,1,11);pad.position.y=.5;pad.receiveShadow=true;g.add(pad);
     for(let i=0;i<6;i++){const st=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0xe8e0d0}));const h=rnd(3,7);st.scale.set(1.2,h,1.2);st.position.set(rnd(-6,6),h/2,rnd(-6,6));st.castShadow=true;g.add(st);
@@ -346,7 +354,7 @@ function startGame(){
   camCfg.tx=nest.x; camCfg.tz=nest.z; placeCam();
   const ban=document.getElementById('banner'); ban.classList.remove('war'); ban.classList.add('peace');
   document.getElementById('ready').style.display='none';
-  setBuild(null); ticker('Gather food and clear brush for sand. Grow your colony in peace!','#b9e08a'); updateHUD();
+  setBuild(null); ticker('Click food to gather or brush to clear — nearest free ant goes automatically!','#b9e08a'); updateHUD();
 }
 
 function addAnt(role){
@@ -671,37 +679,44 @@ function boxSelect(x0,y0,x1,y1){ clearSel(); const minx=Math.min(x0,x1),maxx=Mat
   G.selEgg=null; ticker(G.sel.length?G.sel.length+' ant(s) selected.':'Nothing selected.', G.sel.length?'#cfe9b0':'#9a7a50'); }
 function clearSel(){ G.sel=[]; G.selEgg=null; }
 
+function nearestFreeAnt(tx,tz,role){
+  let best=null,bd=1e9;
+  for(const a of G.ants){if(!a.alive)continue;if(role==='soldier'&&a.role!=='soldier')continue;if(role==='worker'&&a.role==='soldier')continue;if(a.order!==null)continue;const d=d2(a.x,a.z,tx,tz);if(d<bd){bd=d;best=a;}}
+  return best;
+}
+function autoDispatch(ud,point){
+  if(ud.kind==='food'){const a=nearestFreeAnt(ud.ref.x,ud.ref.z,'worker');if(a){a.order={type:'gather',f:ud.ref};ticker('Ant sent to gather.','#7bc455');}else ticker('No free workers.','#9a7a50');}
+  else if(ud.kind==='clutter'){const a=nearestFreeAnt(ud.ref.x,ud.ref.z,'worker');if(a){a.order={type:'clear',c:ud.ref};ticker('Ant sent to clear brush.','#7bc455');}else ticker('No free workers.','#9a7a50');}
+  else if(ud.kind==='enemy'){const a=nearestFreeAnt(ud.ref.x,ud.ref.z,'soldier');if(a){a.order={type:'attack',e:ud.ref};ticker('Soldier sent to attack!','#f0a890');}else ticker('No free soldiers.','#9a7a50');}
+  else if(ud.kind==='build'&&!ud.ref.built){const b=ud.ref;const a=nearestFreeAnt(b.x,b.z,'worker');if(a){a.order={type:'build',b};ticker('Ant sent to build.','#7bc455');}}
+  else{const isRival=point&&d2(point.x,point.z,G.rival.x,G.rival.z)<26&&G.rival.alive;
+    if(isRival){const a=nearestFreeAnt(G.rival.x,G.rival.z,'soldier');if(a){G.raidActive=true;a.order={type:'raid'};ticker('Soldier sent to raid!','#f0a890');}else ticker('No free soldiers.','#9a7a50');}
+    else if(point){const a=nearestFreeAnt(point.x,point.z,null);if(a){a.order={type:'move',x:point.x,z:point.z};burst(point.x,point.z,0x9be86a,5,10,2);}}}
+}
 function handleTap(px,py){
-  if(G.buildMode){ const p=groundPoint(px,py); if(p)placeBuild(G.buildMode,p.x,p.z); return; }
-  tagRefs(); rayAt(px,py);
+  if(G.buildMode){const p=groundPoint(px,py);if(p)placeBuild(G.buildMode,p.x,p.z);return;}
+  tagRefs();rayAt(px,py);
   const hits=ray.intersectObjects(pickList(),false);
   let ud=null,point=null;
-  for(const h of hits){ let o=h.object; let u=o.userData; if(!u||!u.kind){let p=o;while(p&&(!p.userData||!p.userData.kind))p=p.parent;u=p?p.userData:null;} if(u&&u.kind){ud=u;point=h.point;break;} }
-  if(!ud){ clearSel(); return; }
-  if(ud.kind==='ant'||ud.kind==='soldier'){ selectGroup(ud.ref); return; }
-  // tapping a built nursery or barracks sets where ALL new eggs go, until you tap the other one
-  if(ud.kind==='build' && ud.ref.built && (ud.ref.kind==='nursery'||ud.ref.kind==='barracks')){
-    const dest=ud.ref.kind;
-    G.eggDest=dest;
-    // re-route any eggs not yet delivered
-    for(const e of G.eggs){ if(!e.carrier){ e.dest=dest; e.claimed=null; } }
-    ticker('Eggs now go to the '+dest+(dest==='barracks'?' (soldiers).':' (workers).'), '#7bc455');
-    return;
+  for(const h of hits){let o=h.object;let u=o.userData;if(!u||!u.kind){let p=o;while(p&&(!p.userData||!p.userData.kind))p=p.parent;u=p?p.userData:null;}if(u&&u.kind){ud=u;point=h.point;break;}}
+  if(!ud){clearSel();return;}
+  if(ud.kind==='ant'||ud.kind==='soldier'){selectGroup(ud.ref);return;}
+  if(ud.kind==='build'&&ud.ref.built&&(ud.ref.kind==='nursery'||ud.ref.kind==='barracks')){
+    const dest=ud.ref.kind;G.eggDest=dest;
+    for(const e of G.eggs){if(!e.carrier){e.dest=dest;e.claimed=null;}}
+    ticker('Eggs now go to the '+dest+(dest==='barracks'?' (soldiers).':' (workers).'),'#7bc455');return;
   }
-  // commands for selected ants
   if(G.sel.length){
-    if(ud.kind==='food'){ for(const a of G.sel)if(a.role!=='soldier')a.order={type:'gather',f:ud.ref}; ticker('Gathering food.','#7bc455'); }
-    else if(ud.kind==='clutter'){ for(const a of G.sel)if(a.role!=='soldier')a.order={type:'clear',c:ud.ref}; ticker('Clearing brush for sand.','#7bc455'); }
-    else if(ud.kind==='build'){ const b=ud.ref; if(!b.built){ for(const a of G.sel)if(a.role!=='soldier')a.order={type:'build',b}; ticker('Building.','#7bc455'); } }
-    else if(ud.kind==='enemy'){ for(const a of G.sel)if(a.role==='soldier')a.order={type:'attack',e:ud.ref}; ticker('Attacking!','#f0a890'); }
-    else { // ground or rival
-      const isRival = point && d2(point.x,point.z,G.rival.x,G.rival.z)<26 && G.rival.alive;
-      if(isRival){ G.raidActive=true; for(const a of G.sel)if(a.role==='soldier')a.order={type:'raid'}; ticker('Raid! Soldiers march on the rival.','#f0a890'); }
-      else if(point){ for(const a of G.sel)a.order={type:'move',x:point.x,z:point.z}; burst(point.x,point.z,0x9be86a,5,10,2); }
-    }
+    if(ud.kind==='food'){for(const a of G.sel)if(a.role!=='soldier')a.order={type:'gather',f:ud.ref};ticker('Gathering food.','#7bc455');}
+    else if(ud.kind==='clutter'){for(const a of G.sel)if(a.role!=='soldier')a.order={type:'clear',c:ud.ref};ticker('Clearing brush for sand.','#7bc455');}
+    else if(ud.kind==='build'){const b=ud.ref;if(!b.built){for(const a of G.sel)if(a.role!=='soldier')a.order={type:'build',b};ticker('Building.','#7bc455');}}
+    else if(ud.kind==='enemy'){for(const a of G.sel)if(a.role==='soldier')a.order={type:'attack',e:ud.ref};ticker('Attacking!','#f0a890');}
+    else{const isRival=point&&d2(point.x,point.z,G.rival.x,G.rival.z)<26&&G.rival.alive;
+      if(isRival){G.raidActive=true;for(const a of G.sel)if(a.role==='soldier')a.order={type:'raid'};ticker('Raid! Soldiers march on the rival.','#f0a890');}
+      else if(point){for(const a of G.sel)a.order={type:'move',x:point.x,z:point.z};burst(point.x,point.z,0x9be86a,5,10,2);}}
     return;
   }
-  clearSel();
+  autoDispatch(ud,point);
 }
 
 // ---------- build buttons ----------
