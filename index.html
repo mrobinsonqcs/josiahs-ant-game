@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Ant Colony</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:#0e0a06;font-family:'Nunito',sans-serif;color:#f0d9a8;overflow:hidden;display:flex;flex-direction:column;-webkit-user-select:none;user-select:none}
+#stage{position:relative;flex:1;overflow:hidden;touch-action:none;cursor:crosshair}
+#stage canvas{display:block}
+#labels{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:hidden}
+.float{position:absolute;transform:translate(-50%,-50%);font-size:.85rem;font-weight:800;text-shadow:0 1px 3px #000;white-space:nowrap}
+#selbox{position:absolute;border:1.5px solid #f5d76a;background:rgba(245,200,90,.12);display:none;z-index:4;pointer-events:none}
+#top{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;width:min(96%,560px);text-align:center;pointer-events:none}
+.banner{display:inline-flex;align-items:center;gap:9px;background:rgba(18,10,4,.82);border:1.5px solid #3d2510;border-radius:18px;padding:5px 13px;font-size:.78rem;font-weight:800;pointer-events:auto;backdrop-filter:blur(4px)}
+.banner.peace{border-color:#3f6e2a;color:#b9e08a}.banner.war{border-color:#8a3320;color:#f0a890}
+.banner .t{color:#f5b842;font-variant-numeric:tabular-nums}
+#ready{background:#3f6e2a;border:none;color:#eafbe0;font-family:Nunito;font-weight:800;font-size:.7rem;padding:3px 9px;border-radius:11px;cursor:pointer}
+#rival{margin-top:6px;display:inline-flex;align-items:center;gap:6px;font-size:.68rem;font-weight:800;color:#e0986a;background:rgba(18,10,4,.7);border:1px solid #5a2a18;border-radius:11px;padding:3px 10px}
+#rb{width:74px;height:6px;background:#2a1208;border-radius:4px;overflow:hidden}#rf{height:100%;width:100%;background:#cc3322}
+#res{position:absolute;top:8px;left:8px;z-index:6;display:flex;flex-direction:column;gap:4px}
+.chip{display:inline-flex;align-items:center;gap:5px;background:rgba(20,12,5,.82);border:1px solid #3d2510;border-radius:10px;padding:3px 8px;font-size:.74rem;font-weight:800;backdrop-filter:blur(3px)}
+.chip .v{color:#f5b842}
+#zoom{position:absolute;right:8px;bottom:8px;z-index:6;display:flex;flex-direction:column;gap:6px}
+#zoom button{width:36px;height:36px;border-radius:9px;border:1.5px solid #5c3a1e;background:rgba(30,18,8,.85);color:#f0d9a8;font-size:1.2rem;font-weight:800;cursor:pointer}
+#hud{background:#100702;border-top:2px solid #3d2510;padding:7px 9px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+.row{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.b{background:#251608;border:1.5px solid #5c3a1e;border-radius:9px;color:#f0d9a8;font-family:Nunito;font-weight:700;font-size:.7rem;padding:5px 7px;cursor:pointer;text-align:center;line-height:1.15;transition:background .12s,border-color .12s}
+.b .c{display:block;color:#7a5a30;font-size:.58rem}
+.b:hover:not(:disabled){background:#3d2510;border-color:#e8930a}
+.b:disabled{opacity:.35;cursor:not-allowed}
+.b.active{background:#5a3a12;border-color:#f5b842;box-shadow:0 0 0 1px #f5b84255 inset}
+.b.sel{border-color:#6ec24a;color:#cfe9b0}
+#ticker{font-size:.7rem;color:#9a7a50;min-height:14px}#ticker b{color:#f5b842}
+#legend{font-size:.62rem;color:#7a5c38;line-height:1.4}#legend b{color:#b8904f}
+#ov{display:none;position:absolute;inset:0;background:#000000cc;z-index:20;align-items:center;justify-content:center}#ov.show{display:flex}
+#ovb{background:#251608;border:2px solid #5c3a1e;border-radius:18px;padding:24px 22px;text-align:center;max-width:320px;width:90%}
+#ovb h2{font-family:'Fredoka One';font-size:1.6rem;margin-bottom:8px}#ovb p{color:#9a7a50;font-size:.82rem;margin-bottom:14px}
+#ovb button{background:#3d2510;border:2px solid #e8930a;color:#f5b842;font-family:'Fredoka One';font-size:1rem;padding:8px 24px;border-radius:10px;cursor:pointer}
+#err{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;color:#e08070;font-weight:700;padding:24px;z-index:30}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="labels"></div>
+  <div id="selbox"></div>
+  <div id="res">
+    <span class="chip">🌿 <span class="v" id="r-food">0</span></span>
+    <span class="chip">⛏️ <span class="v" id="r-sand">0</span></span>
+    <span class="chip">🥚 <span class="v" id="r-eggs">0</span></span>
+    <span class="chip">🐜 <span class="v" id="r-ants">0</span></span>
+    <span class="chip">⚔️ <span class="v" id="r-sol">0</span></span>
+  </div>
+  <div id="top">
+    <div class="banner peace" id="banner"><span id="btext">Peaceful build-up</span><span class="t" id="btime">1:00</span><button id="ready">Start waves ▶</button></div>
+    <div id="rival"><span>Rival</span><div id="rb"><div id="rf"></div></div><span id="rlv">Lv 1</span></div>
+  </div>
+  <div id="zoom"><button id="zin">+</button><button id="zout">−</button></div>
+  <div id="err">Could not load the 3D engine. Check your connection and reload.</div>
+  <div id="ov"><div id="ovb"><h2 id="ovt">—</h2><p id="ovm"></p><button id="replay">Play Again</button></div></div>
+</div>
+<div id="hud">
+  <div class="row" id="builds">
+    <button class="b" data-build="nursery">🍼 Nursery<span class="c">12 sand</span></button>
+    <button class="b" data-build="barracks">⚔️ Barracks<span class="c">16 sand</span></button>
+    <button class="b" data-build="store">🏚️ Store<span class="c">10 sand</span></button>
+    <button class="b" data-build="fungus">🍄 Fungus<span class="c">14 sand</span></button>
+    <button class="b" data-build="wall">🧱 Wall<span class="c">4 sand</span></button>
+    <button class="b" data-build="tower">🗼 Tower<span class="c">18 sand</span></button>
+    <button class="b" id="cancelbuild" style="display:none;border-color:#e06050;color:#f0a090">✕ Cancel</button>
+  </div>
+  <div class="row">
+    <button class="b" id="sel-ants">Select all ants</button>
+    <button class="b" id="sel-sol">Select all soldiers</button>
+    <span id="ticker">Tap an ant to select it, then tap where to send it...</span>
+  </div>
+  <div id="legend">Tap an ant to grab its group · drag on the ground to box-select · tap <b>food</b> to gather, <b>brush</b> to clear for sand, an <b>enemy</b> to attack, the <b>rival</b> to raid · tap your <b>nursery</b> or <b>barracks</b> to send an egg there to hatch · two-finger or right-drag (or arrow keys) to pan · pick a build then tap the glowing grid to place it</div>
+</div>
+
+<script>
+if(typeof THREE==='undefined'){ document.getElementById('err').style.display='flex'; }
+else { boot(); }
+function boot(){
+"use strict";
+const rnd=(a,b)=>a+Math.random()*(b-a), rndI=(a,b)=>Math.floor(rnd(a,b+1));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t;
+const d2=(ax,az,bx,bz)=>Math.hypot(ax-bx,az-bz);
+function lerpAng(a,b,t){let d=((b-a+Math.PI)%(Math.PI*2))-Math.PI;if(d<-Math.PI)d+=Math.PI*2;return a+d*t;}
+
+const MAP=1100, HALF=MAP/2, BOUND=HALF-40;
+const GRID=20, RIVAL_TRIGGER=140;
+const COST={nursery:12,barracks:16,store:10,fungus:14,wall:4,tower:18};
+const BTIME={nursery:4,barracks:4,store:4,fungus:4,wall:1.5,tower:5};
+
+// ---------- renderer ----------
+const stage=document.getElementById('stage');
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputEncoding=THREE.sRGBEncoding;
+stage.appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x1a2a3a);
+scene.fog=new THREE.Fog(0x1a2a3a,560,1400);
+
+const camera=new THREE.PerspectiveCamera(50,1,1,3000);
+const camCfg={yaw:0.6, phi:0.92, dist:190, tx:-150, tz:60};
+function placeCam(){
+  const sp=Math.sin(camCfg.phi),cp=Math.cos(camCfg.phi);
+  camera.position.set(camCfg.tx+camCfg.dist*sp*Math.sin(camCfg.yaw), camCfg.dist*cp, camCfg.tz+camCfg.dist*sp*Math.cos(camCfg.yaw));
+  camera.lookAt(camCfg.tx,0,camCfg.tz);
+}
+function camRight(){ return new THREE.Vector3(Math.cos(camCfg.yaw),0,-Math.sin(camCfg.yaw)); }
+function camFwd(){ return new THREE.Vector3(Math.sin(camCfg.yaw),0,Math.cos(camCfg.yaw)); }
+
+// ---------- lights ----------
+scene.add(new THREE.HemisphereLight(0xcfe0ff,0x2a2014,0.7));
+const sun=new THREE.DirectionalLight(0xfff0d0,1.1);
+sun.position.set(120,200,80); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.near=40; sun.shadow.camera.far=1400;
+sun.shadow.camera.left=-660;sun.shadow.camera.right=660;sun.shadow.camera.top=660;sun.shadow.camera.bottom=-660;
+sun.shadow.bias=-0.0004; scene.add(sun); scene.add(sun.target);
+
+// ---------- ground ----------
+function groundTex(){
+  const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');
+  g.fillStyle='#3a5a28';g.fillRect(0,0,256,256);
+  for(let i=0;i<2600;i++){const s=Math.random();
+    g.fillStyle=s<0.5?'rgba(40,72,28,0.5)':s<0.85?'rgba(74,104,40,0.4)':'rgba(120,150,70,0.3)';
+    const r=0.6+Math.random()*2;g.beginPath();g.arc(Math.random()*256,Math.random()*256,r,0,7);g.fill();}
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(20,20);t.encoding=THREE.sRGBEncoding;return t;
+}
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(MAP,MAP),new THREE.MeshStandardMaterial({map:groundTex(),roughness:1}));
+ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; ground.userData={kind:'ground'}; scene.add(ground);
+
+// ---------- shared geo/mat ----------
+const G_=new THREE.SphereGeometry(1,12,10);
+const G_leg=new THREE.CylinderGeometry(0.13,0.09,2.2,5);
+const G_cone=new THREE.ConeGeometry(0.4,1.1,6);
+const G_box=new THREE.BoxGeometry(1,1,1);
+const G_cyl=new THREE.CylinderGeometry(1,1,1,12);
+const G_ring=new THREE.TorusGeometry(3.4,0.4,8,24);
+const M={
+  ant:new THREE.MeshStandardMaterial({color:0xcf8f33,roughness:.55}),
+  antD:new THREE.MeshStandardMaterial({color:0x8a5e1d,roughness:.6}),
+  sol:new THREE.MeshStandardMaterial({color:0xcf3f24,roughness:.5}),
+  solD:new THREE.MeshStandardMaterial({color:0x7e2615,roughness:.55}),
+  eye:new THREE.MeshStandardMaterial({color:0x0a0604}),
+  queen:new THREE.MeshStandardMaterial({color:0xe0b84a,roughness:.45,metalness:.2}),
+  leaf:new THREE.MeshStandardMaterial({color:0x6ec22e,roughness:.6}),
+  egg:new THREE.MeshStandardMaterial({color:0xfbeec0,roughness:.35,emissive:0xb89030,emissiveIntensity:0.6}),
+  enemy:new THREE.MeshStandardMaterial({color:0x6a3a1a,roughness:.5}),
+  enemyD:new THREE.MeshStandardMaterial({color:0x3a1c0c,roughness:.5}),
+  redeye:new THREE.MeshStandardMaterial({color:0xcc3344,emissive:0x551016}),
+  ghost:new THREE.MeshStandardMaterial({color:0x88ff88,transparent:true,opacity:.4}),
+};
+function sph(mat,sx,sy,sz,x,y,z,sh){const m=new THREE.Mesh(G_,mat);m.scale.set(sx,sy,sz);m.position.set(x,y,z);if(sh)m.castShadow=true;return m;}
+
+// ---------- ant / soldier / queen models ----------
+function buildAnt(role){
+  const g=new THREE.Group(),body=new THREE.Group();g.add(body);
+  const c=role==='soldier'?M.sol:M.ant, dk=role==='soldier'?M.solD:M.antD;
+  body.add(sph(c,1.5,1.35,2.0,0,1.5,-1.7,true));
+  body.add(sph(c,1.0,1.0,1.1,0,1.45,0.1,true));
+  body.add(sph(c,1.1,1.1,1.1,0,1.6,1.7,true));
+  body.add(sph(M.eye,.28,.28,.28,-.55,1.9,2.35));
+  body.add(sph(M.eye,.28,.28,.28,.55,1.9,2.35));
+  for(const s of[-1,1]){const a=new THREE.Mesh(G_leg,dk);a.position.set(s*.4,2.3,3);a.rotation.x=-.9;a.rotation.z=s*.25;a.scale.set(.6,.7,.6);body.add(a);}
+  if(role==='soldier')for(const s of[-1,1]){const m=new THREE.Mesh(G_cone,M.solD);m.position.set(s*.4,1.5,2.7);m.rotation.x=1.9;m.rotation.z=s*.4;m.scale.set(.7,.9,.7);body.add(m);}
+  const legs=[],hz=[.7,0,-.7];
+  for(let i=0;i<3;i++)for(const s of[-1,1]){const p=new THREE.Group();p.position.set(s*.9,1.2,hz[i]);const l=new THREE.Mesh(G_leg,dk);l.position.set(s*1,-.4,0);l.rotation.z=s*1;p.add(l);p.userData={side:s,ph:i*2.1};body.add(p);legs.push(p);}
+  const carry=new THREE.Mesh(G_,M.leaf);carry.scale.set(.9,.4,1.2);carry.position.set(0,2.6,2);carry.visible=false;body.add(carry);
+  const ring=new THREE.Mesh(G_ring,new THREE.MeshBasicMaterial({color:0x9be86a}));ring.rotation.x=-Math.PI/2;ring.position.y=.3;ring.visible=false;g.add(ring);
+  g.scale.setScalar(role==='soldier'?1.3:1.0);
+  return {g,body,legs,carry,ring};
+}
+function buildQueen(){
+  const g=new THREE.Group(),body=new THREE.Group();g.add(body);
+  body.add(sph(M.queen,2.4,2.0,3.4,0,2,-2.4,true));
+  body.add(sph(M.queen,1.5,1.5,1.6,0,2,0.4,true));
+  body.add(sph(M.queen,1.6,1.6,1.6,0,2.2,2.6,true));
+  body.add(sph(M.eye,.4,.4,.4,-.8,2.6,3.3));body.add(sph(M.eye,.4,.4,.4,.8,2.6,3.3));
+  // crown
+  for(let i=0;i<5;i++){const sp=new THREE.Mesh(G_cone,new THREE.MeshStandardMaterial({color:0xffe28a,emissive:0x6a5010}));
+    const a=(i/5-.5)*1.6;sp.position.set(Math.sin(a)*1.2,3.6,2.6+Math.cos(a)*0.3);sp.scale.set(.5,.8,.5);body.add(sp);}
+  g.scale.setScalar(1.5);return {g,body};
+}
+
+// ---------- enemy ----------
+function buildEnemy(){
+  const g=new THREE.Group(),body=new THREE.Group();g.add(body);
+  body.add(sph(M.enemy,2.4,2.0,2.8,0,1.9,-.4,true));
+  body.add(sph(M.enemyD,1.3,1.2,1.3,0,1.7,1.6,true));
+  body.add(sph(M.redeye,.3,.3,.3,-.5,2,2.3));body.add(sph(M.redeye,.3,.3,.3,.5,2,2.3));
+  const legs=[];
+  for(let i=0;i<3;i++)for(const s of[-1,1]){const p=new THREE.Group();p.position.set(s*1.4,1,1-i*1.1);const l=new THREE.Mesh(G_leg,M.enemyD);l.scale.set(1.1,1.1,1.1);l.position.set(s*1,-.3,0);l.rotation.z=s*1.1;p.add(l);p.userData={ph:i*1.5};body.add(p);legs.push(p);}
+  return {g,body,legs};
+}
+
+// ---------- buildings ----------
+function buildStruct(kind){
+  const g=new THREE.Group(); let pick;
+  if(kind==='nursery'){
+    const base=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0xcaa23a,roughness:.7}));base.scale.set(9,7,9);base.position.y=3.5;base.castShadow=true;g.add(base);
+    const roof=new THREE.Mesh(G_cone,new THREE.MeshStandardMaterial({color:0xe0b85a}));roof.scale.set(11,8,11);roof.position.y=10;roof.castShadow=true;g.add(roof);
+    for(let i=0;i<3;i++){const e=new THREE.Mesh(G_,M.egg);e.scale.set(1.1,1.5,1.1);e.position.set(rnd(-3,3),1.5,rnd(2,6));g.add(e);}
+    pick=base;
+  } else if(kind==='barracks'){
+    const base=new THREE.Mesh(G_box,new THREE.MeshStandardMaterial({color:0x9a3a24,roughness:.6}));base.scale.set(18,9,16);base.position.y=4.5;base.castShadow=true;g.add(base);
+    for(const sx of[-1,1])for(const sz of[-1,1]){const t=new THREE.Mesh(G_box,new THREE.MeshStandardMaterial({color:0x7e2615}));t.scale.set(3,13,3);t.position.set(sx*8,6.5,sz*7);t.castShadow=true;g.add(t);}
+    const flag=new THREE.Mesh(new THREE.PlaneGeometry(6,4),new THREE.MeshStandardMaterial({color:0xcf3f24,side:THREE.DoubleSide}));flag.position.set(0,16,0);g.add(flag);
+    pick=base;
+  } else if(kind==='store'){
+    const dome=new THREE.Mesh(G_,new THREE.MeshStandardMaterial({color:0x5a9e3a,roughness:.6}));dome.scale.set(10,8,10);dome.position.y=2;dome.castShadow=true;g.add(dome);
+    for(let i=0;i<5;i++){const l=new THREE.Mesh(G_,M.leaf);l.scale.set(2,1.3,2.4);l.position.set(rnd(-5,5),rnd(6,10),rnd(-5,5));g.add(l);}
+    pick=dome;
+  } else if(kind==='fungus'){
+    const pad=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x2a3a2a}));pad.scale.set(11,1,11);pad.position.y=.5;pad.receiveShadow=true;g.add(pad);
+    for(let i=0;i<6;i++){const st=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0xe8e0d0}));const h=rnd(3,7);st.scale.set(1.2,h,1.2);st.position.set(rnd(-6,6),h/2,rnd(-6,6));st.castShadow=true;g.add(st);
+      const cap=new THREE.Mesh(G_,new THREE.MeshStandardMaterial({color:0x3aa890,emissive:0x114038,roughness:.5}));cap.scale.set(3,1.6,3);cap.position.set(st.position.x,h,st.position.z);g.add(cap);}
+    pick=pad;
+  } else if(kind==='wall'){
+    const w=new THREE.Mesh(G_box,new THREE.MeshStandardMaterial({color:0x7a6450,roughness:1}));w.scale.set(GRID,11,GRID);w.position.y=5.5;w.castShadow=true;w.receiveShadow=true;g.add(w);
+    const cap=new THREE.Mesh(G_box,new THREE.MeshStandardMaterial({color:0x5a4836}));cap.scale.set(GRID+1,2,GRID+1);cap.position.y=11;g.add(cap);
+    pick=w;
+  } else if(kind==='tower'){
+    const base=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x6a5640,roughness:.9}));base.scale.set(6,16,6);base.position.y=8;base.castShadow=true;g.add(base);
+    const top=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x4a3a28}));top.scale.set(8,4,8);top.position.y=16;top.castShadow=true;g.add(top);
+    const horn=new THREE.Mesh(G_cone,new THREE.MeshStandardMaterial({color:0x3a2a1a}));horn.scale.set(2,5,2);horn.position.y=20;g.add(horn);
+    pick=base;
+  }
+  return {g,pick};
+}
+function buildNestMound(){
+  const g=new THREE.Group();
+  for(let i=0;i<4;i++){const r=16-i*3;const m=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x4a2e15,roughness:1}));m.scale.set(r,4,r);m.position.y=i*2.4+2;m.castShadow=true;m.receiveShadow=true;g.add(m);}
+  const hole=new THREE.Mesh(new THREE.CircleGeometry(5,20),new THREE.MeshBasicMaterial({color:0x050302}));hole.rotation.x=-Math.PI/2;hole.position.y=11.6;g.add(hole);
+  const light=new THREE.PointLight(0xffb347,.8,90,2);light.position.set(0,8,0);g.add(light);
+  return g;
+}
+function buildRival(){
+  const g=new THREE.Group();
+  for(let i=0;i<4;i++){const r=20-i*4;const m=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x3a1a12,roughness:1}));m.scale.set(r,5,r);m.position.y=i*3+2.5;m.castShadow=true;g.add(m);}
+  const hole=new THREE.Mesh(new THREE.CircleGeometry(6,20),new THREE.MeshBasicMaterial({color:0x1a0000}));hole.rotation.x=-Math.PI/2;hole.position.y=14.6;g.add(hole);
+  const light=new THREE.PointLight(0xcc3322,.7,90,2);light.position.set(0,8,0);g.add(light);
+  return g;
+}
+
+// ---------- food / clutter / egg ----------
+function buildFood(){
+  const g=new THREE.Group();
+  for(let i=0;i<5;i++){const l=new THREE.Mesh(G_,M.leaf);l.scale.set(rnd(2,3.4),rnd(1.4,2.2),rnd(2,3.4));l.position.set(rnd(-4,4),rnd(1,4),rnd(-4,4));l.castShadow=true;g.add(l);}
+  const hit=new THREE.Mesh(new THREE.SphereGeometry(8,8,6),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=3;g.add(hit);
+  return {g,hit};
+}
+function buildClutter(){
+  const g=new THREE.Group();
+  const roll=Math.random();
+  let type;
+  if(roll<0.45){ // tall grass: a tuft of swaying blades
+    type='grass';
+    for(let i=0;i<7;i++){const b=new THREE.Mesh(G_cone,new THREE.MeshStandardMaterial({color:i%2?0x5a8a30:0x6ea83a,roughness:.9}));
+      b.scale.set(0.8,rnd(6,11),0.8);b.position.set(rnd(-3,3),b.scale.y/2,rnd(-3,3));b.rotation.z=rnd(-.25,.25);b.castShadow=true;g.add(b);}
+  } else if(roll<0.8){ // bush
+    type='bush';
+    const trunk=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x5a4028}));trunk.scale.set(1,3,1);trunk.position.y=1.5;g.add(trunk);
+    for(let i=0;i<4;i++){const f=new THREE.Mesh(G_,new THREE.MeshStandardMaterial({color:i%2?0x3f7a2a:0x4f8e34,roughness:.85}));
+      const s=rnd(3,5);f.scale.set(s,s*.8,s);f.position.set(rnd(-3,3),rnd(4,7),rnd(-3,3));f.castShadow=true;g.add(f);}
+  } else { // tree
+    type='tree';
+    const trunk=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x6a4a2a,roughness:1}));trunk.scale.set(2,14,2);trunk.position.y=7;trunk.castShadow=true;g.add(trunk);
+    for(let i=0;i<4;i++){const c=new THREE.Mesh(G_,new THREE.MeshStandardMaterial({color:i%2?0x356a24:0x46862f,roughness:.85}));
+      const s=rnd(6,9);c.scale.set(s,s*.85,s);c.position.set(rnd(-3,3),rnd(14,20),rnd(-3,3));c.castShadow=true;g.add(c);}
+  }
+  const hit=new THREE.Mesh(new THREE.SphereGeometry(8,8,6),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=5;g.add(hit);
+  return {g,hit,type};
+}
+function barePatch(x,z){
+  const m=new THREE.Mesh(new THREE.CircleGeometry(rnd(7,10),16),new THREE.MeshStandardMaterial({color:0x6a4a2a,roughness:1}));
+  m.rotation.x=-Math.PI/2; m.position.set(x,0.16,z); m.receiveShadow=true; scene.add(m);
+}
+function buildEggMesh(){const m=new THREE.Mesh(G_,M.egg);m.scale.set(1.3,1.8,1.3);m.castShadow=true;return m;}
+
+// ---------- particles ----------
+function softTex(){const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');const gr=g.createRadialGradient(32,32,0,32,32,32);gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);}
+const PTEX=softTex(),pPool=[],pAct=[];
+for(let i=0;i<120;i++){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:PTEX,blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));s.visible=false;scene.add(s);pPool.push(s);}
+function burst(x,z,color,n,spd=24,y=4){for(let i=0;i<n;i++){const s=pPool.pop();if(!s)break;s.visible=true;s.material.color.setHex(color);s.material.opacity=1;s.position.set(x,y,z);const a=rnd(0,7);s.userData={vx:Math.cos(a)*rnd(8,spd),vy:rnd(8,spd),vz:Math.sin(a)*rnd(8,spd),life:1,sz:rnd(3,6)};s.scale.setScalar(s.userData.sz);pAct.push(s);}}
+function tickParticles(dt){for(let i=pAct.length-1;i>=0;i--){const s=pAct[i],u=s.userData;s.position.x+=u.vx*dt;s.position.y+=u.vy*dt;s.position.z+=u.vz*dt;u.vy-=26*dt;u.life-=dt*2;s.material.opacity=Math.max(0,u.life);s.scale.setScalar(u.sz*(.4+u.life));if(u.life<=0){s.visible=false;pAct.splice(i,1);pPool.push(s);}}}
+
+// ---------- projected floating text ----------
+const labels=document.getElementById('labels'),pv=new THREE.Vector3(),floats=[];
+function project(x,y,z){pv.set(x,y,z).project(camera);return{x:(pv.x*.5+.5)*stage.clientWidth,y:(-pv.y*.5+.5)*stage.clientHeight,front:pv.z<1};}
+function floatText(x,y,z,t,c){const el=document.createElement('div');el.className='float';el.textContent=t;el.style.color=c;labels.appendChild(el);floats.push({el,x,y,z,life:1});}
+function tickFloats(dt){for(let i=floats.length-1;i>=0;i--){const f=floats[i];f.y+=dt*16;f.life-=dt*.7;const p=project(f.x,f.y,f.z);if(f.life<=0||!p.front){f.el.remove();floats.splice(i,1);continue;}f.el.style.left=p.x+'px';f.el.style.top=p.y+'px';f.el.style.opacity=Math.min(1,f.life*1.6);}}
+
+// ===================================================================
+let G=null; const clock=new THREE.Clock();
+const nestMound=buildNestMound(); scene.add(nestMound);
+const rivalView=buildRival(); scene.add(rivalView);
+
+// build grid overlay + placement ghost
+const gridHelper=new THREE.GridHelper(MAP, MAP/GRID, 0x8acb66, 0x3a5a30);
+gridHelper.material.transparent=true; gridHelper.material.opacity=0.32; gridHelper.position.y=0.25; gridHelper.visible=false;
+scene.add(gridHelper);
+const ghostTile=new THREE.Mesh(new THREE.PlaneGeometry(GRID*0.92,GRID*0.92), new THREE.MeshBasicMaterial({color:0x66ff66,transparent:true,opacity:0.4,side:THREE.DoubleSide}));
+ghostTile.rotation.x=-Math.PI/2; ghostTile.position.y=0.3; ghostTile.visible=false; scene.add(ghostTile);
+// rival danger zone (shown while dormant)
+const dangerZone=new THREE.Mesh(new THREE.CircleGeometry(RIVAL_TRIGGER,40), new THREE.MeshBasicMaterial({color:0xcc3322,transparent:true,opacity:0.12,side:THREE.DoubleSide}));
+dangerZone.rotation.x=-Math.PI/2; dangerZone.position.y=0.2; scene.add(dangerZone);
+const snap=v=>Math.round(v/GRID)*GRID;
+const cellKey=(gx,gz)=>gx+'_'+gz;
+
+function startGame(){
+  // clear
+  if(G){ for(const a of G.ants)scene.remove(a.view.g); for(const e of G.enemies)scene.remove(e.view.g);
+    for(const b of G.builds)scene.remove(b.view.g); for(const f of G.foods)scene.remove(f.view.g);
+    for(const c of G.clutter)scene.remove(c.view.g); for(const e of G.eggs)scene.remove(e.mesh); }
+  for(const f of floats)f.el.remove(); floats.length=0;
+  document.getElementById('ov').classList.remove('show');
+
+  const nest={x:-320,z:100}, rival={x:320,z:-100};
+  nestMound.position.set(nest.x,0,nest.z);
+  rivalView.position.set(rival.x,0,rival.z);
+  dangerZone.position.set(rival.x,0.2,rival.z); dangerZone.visible=true;
+
+  G={ food:9999, sand:9999, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], eggs:[], hatch:[], cells:new Set(),
+    queen:{x:nest.x,z:nest.z,hp:160,maxHp:160,layCd:5},
+    rival:{x:rival.x,z:rival.z,hp:120,maxHp:120,level:1,alive:true,respawn:0},
+    phase:'dormant', raidTimer:0, raidWarn:false, raidActive:false,
+    sel:[], selEgg:null, buildMode:null, over:false, time:0, nurseHint:false, eggDest:'nursery' };
+
+  for(let i=0;i<5;i++) addAnt('ant');
+  addAnt('soldier'); addAnt('soldier');
+  // food piles spread across the map, kept away from the rival nest
+  for(let i=0;i<22;i++) addFood(rnd(-HALF+80,HALF-80),rnd(-HALF+80,HALF-80));
+  // dense vegetation covering most of the map
+  for(let i=0;i<80;i++) addClutter(rnd(-HALF+60,HALF-60),rnd(-HALF+60,HALF-60));
+
+  camCfg.tx=nest.x; camCfg.tz=nest.z; placeCam();
+  const ban=document.getElementById('banner'); ban.classList.remove('war'); ban.classList.add('peace');
+  document.getElementById('ready').style.display='none';
+  setBuild(null); ticker('Gather food and clear brush for sand. Grow your colony in peace!','#b9e08a'); updateHUD();
+}
+
+function addAnt(role){
+  const v=buildAnt(role); const n=G?G.nest:{x:-150,z:60};
+  v.g.position.set(n.x+rnd(-12,12),0,n.z+rnd(-12,12));
+  scene.add(v.g);
+  G.ants.push({x:v.g.position.x,z:v.g.position.z,role,alive:true,hp:role==='soldier'?80:34,maxHp:role==='soldier'?80:34,
+    speed:role==='soldier'?34:28,heading:0,wob:rnd(0,7),flash:0,atkCd:0,
+    carryFood:0,carryEgg:null,order:null,hold:null,view:v});
+}
+function addEnemy(){const v=buildEnemy();const r=G.rival;v.g.position.set(r.x+rnd(-8,8),0,r.z+rnd(-8,8));
+  scene.add(v.g);
+  const lv=r.level;G.enemies.push({x:v.g.position.x,z:v.g.position.z,hp:30+lv*10,maxHp:30+lv*10,speed:20+lv*1.5,atk:7+lv*2,
+    alive:true,heading:0,wob:rnd(0,7),flash:0,atkCd:0,view:v});}
+function addFood(x,z){ if(G&&d2(x,z,G.rival.x,G.rival.z)<RIVAL_TRIGGER+50)return; const v=buildFood();v.g.position.set(x,0,z);scene.add(v.g);G.foods.push({x,z,amount:rndI(20,40),view:v});}
+function addClutter(x,z){if(d2(x,z,-150,60)<34)return; if(G&&d2(x,z,G.rival.x,G.rival.z)<RIVAL_TRIGGER+40)return; const v=buildClutter();v.g.position.set(x,0,z);scene.add(v.g);G.clutter.push({x,z,view:v});}
+function layEgg(){const v=buildEggMesh();const n=G.nest;const x=n.x+rnd(-6,6),z=n.z+rnd(-6,6);v.position.set(x,12,z);scene.add(v);
+  G.eggs.push({x,z,y:12,dest:G.eggDest||'nursery',carrier:null,claimed:null,mesh:v});burst(n.x,n.z,0xf5b842,5,18,12);}
+
+// ---------- helpers ----------
+function builtOf(kind){return G.builds.filter(b=>b.kind===kind&&b.built);}
+function nearestBuilt(kind,x,z){let best=null,bd=1e9;for(const b of builtOf(kind)){const d=d2(x,z,b.x,b.z);if(d<bd){bd=d;best=b;}}return best;}
+function foodCap(){ return 99999+builtOf('store').length*40; }
+function moveTo(e,tx,tz,sp,dt,th=2){const dx=tx-e.x,dz=tz-e.z,d=Math.hypot(dx,dz);if(d<th){return true;}e.x+=dx/d*sp*dt;e.z+=dz/d*sp*dt;if(Math.abs(dx)>.1||Math.abs(dz)>.1)e.heading=Math.atan2(dx,dz);return false;}
+function collideWalls(e,radius){for(const b of G.builds){if(b.kind!=='wall'||!b.built)continue;const dx=e.x-b.x,dz=e.z-b.z,d=Math.hypot(dx,dz),min=radius+GRID*0.55;if(d<min&&d>0.01){e.x=b.x+dx/d*min;e.z=b.z+dz/d*min;return b;}}return null;}
+
+// ---------- ant AI ----------
+function tickAnts(dt){
+  for(const a of G.ants){
+    if(!a.alive)continue;
+    a.wob+=dt*10;a.flash=Math.max(0,a.flash-dt*8);a.atkCd=Math.max(0,a.atkCd-dt);
+    const o=a.order;
+    if(o){ runOrder(a,o,dt); }
+    else { autoAnt(a,dt); }
+    collideWalls(a,3);
+    a.x=clamp(a.x,-BOUND,BOUND);a.z=clamp(a.z,-BOUND,BOUND);
+  }
+}
+function runOrder(a,o,dt){
+  if(a.fetchEgg){ a.fetchEgg.claimed=null; a.fetchEgg=null; }
+  if(o.type==='move'){ if(moveTo(a,o.x,o.z,a.speed,dt,2.5)){ a.hold={x:o.x,z:o.z}; a.order=null; } return; }
+  if(o.type==='gather'){ const f=o.f; if(!f||f.amount<=0){a.order=null;return;} doGather(a,f,dt); return; }
+  if(o.type==='clear'){ const c=o.c; if(!c||c.removed){a.order=null;return;} doClear(a,c,dt); return; }
+  if(o.type==='build'){ const b=o.b; if(!b||b.built){a.order=null;return;} doBuild(a,b,dt); return; }
+  if(o.type==='attack'){ const e=o.e; if(!e||!e.alive){a.order=null;return;} doAttack(a,e,dt); return; }
+  if(o.type==='raid'){ doRaid(a,dt); return; }
+  a.order=null;
+}
+function autoAnt(a,dt){
+  if(a.role==='soldier'){ autoSoldier(a,dt); return; }
+  // regular ant: deliver carried egg/food first
+  if(a.carryEgg){ deliverEgg(a,dt); return; }
+  if(a.carryFood>0){ const n=G.nest; if(moveTo(a,n.x,n.z,a.speed,dt,8)){ G.food=Math.min(foodCap(),G.food+a.carryFood); floatText(n.x,16,n.z,'+'+a.carryFood,'#f5b842'); a.carryFood=0; } return; }
+  // claim a loose egg that has somewhere to hatch, then walk to the nest to pick it up
+  if(!a.fetchEgg){ const egg=G.eggs.find(e=>!e.carrier && !e.claimed && nearestBuilt(e.dest,a.x,a.z)); if(egg){ a.fetchEgg=egg; egg.claimed=a; } }
+  if(a.fetchEgg){
+    const egg=a.fetchEgg;
+    if(!G.eggs.includes(egg)){ a.fetchEgg=null; }
+    else if(moveTo(a,egg.x,egg.z,a.speed,dt,7)){ egg.carrier=a; a.carryEgg=egg; a.fetchEgg=null; floatText(egg.x,16,egg.z,'🥚','#f5b842'); }
+    return;
+  }
+  // build nearest blueprint
+  const bp=G.builds.filter(b=>!b.built).sort((p,q)=>d2(a.x,a.z,p.x,p.z)-d2(a.x,a.z,q.x,q.z))[0];
+  if(bp){ a.order={type:'build',b:bp}; return; }
+  // gather or clear depending on need
+  if(G.sand<10){ const c=nearestClutter(a); if(c){ doClear(a,c,dt); return; } }
+  const f=G.foods.filter(f=>f.amount>0).sort((p,q)=>d2(a.x,a.z,p.x,p.z)-d2(a.x,a.z,q.x,q.z))[0];
+  if(f && G.food<foodCap()){ doGather(a,f,dt); return; }
+  const c=nearestClutter(a); if(c){ doClear(a,c,dt); return; }
+  if(a.hold){ moveTo(a,a.hold.x,a.hold.z,a.speed*.6,dt,3); } else idle(a,dt);
+}
+function nearestClutter(a){return G.clutter.filter(c=>!c.removed).sort((p,q)=>d2(a.x,a.z,p.x,p.z)-d2(a.x,a.z,q.x,q.z))[0];}
+function doGather(a,f,dt){
+  if(d2(a.x,a.z,f.x,f.z)>7){ moveTo(a,f.x,f.z,a.speed,dt,7); return; }
+  const take=Math.min(f.amount,5);f.amount-=take;a.carryFood=take;burst(a.x,a.z,0x6ec22e,4);
+  if(f.amount<=0){scene.remove(f.view.g);const i=G.foods.indexOf(f);if(i>=0)G.foods.splice(i,1);if(Math.random()<.7)addFood(rnd(-HALF+60,HALF-60),rnd(-HALF+60,HALF-60));}
+  if(a.order&&a.order.type==='gather')a.order=null;
+}
+function doClear(a,c,dt){
+  if(d2(a.x,a.z,c.x,c.z)>7){ moveTo(a,c.x,c.z,a.speed,dt,7); return; }
+  c.prog=(c.prog||0)+dt; if(Math.random()<dt*6)burst(c.x,c.z,0x6e9a3a,2);
+  if(c.prog>=2){ c.removed=true; scene.remove(c.view.g); barePatch(c.x,c.z); const i=G.clutter.indexOf(c);if(i>=0)G.clutter.splice(i,1); G.sand+=3; floatText(c.x,8,c.z,'+3 sand','#d2a85a'); if(a.order)a.order=null; }
+}
+function doBuild(a,b,dt){
+  if(d2(a.x,a.z,b.x,b.z)>14){ moveTo(a,b.x,b.z,a.speed,dt,14); return; }
+  b.prog+=dt; if(Math.random()<dt*5)burst(b.x,b.z,0xd2a85a,2);
+  if(b.prog>=BTIME[b.kind]){ b.built=true; b.view.g.traverse(o=>{ if(o.isMesh&&o.material===M.ghost){ o.material=o.userData.solid||M.ant; o.castShadow=true; } }); finishBuild(b); if(a.order)a.order=null; }
+}
+function deliverEgg(a,dt){
+  const egg=a.carryEgg; const b=nearestBuilt(egg.dest,a.x,a.z);
+  if(!b){ // no hatchery: drop the egg back at the nest
+    a.carryEgg=null; egg.carrier=null; egg.claimed=null; egg.x=G.nest.x+rnd(-6,6); egg.z=G.nest.z+rnd(-6,6); egg.y=12; egg.mesh.position.set(egg.x,12,egg.z); return; }
+  egg.x=a.x;egg.z=a.z;
+  if(moveTo(a,b.x,b.z,a.speed,dt,10)){
+    scene.remove(egg.mesh); const i=G.eggs.indexOf(egg);if(i>=0)G.eggs.splice(i,1);
+    a.carryEgg=null;
+    const kind=egg.dest==='barracks'?'soldier':'ant';
+    G.hatch.push({x:b.x,z:b.z,kind,t:4}); burst(b.x,b.z,0xf5b842,6);
+  }
+}
+function autoSoldier(a,dt){
+  // engage nearby enemy
+  const e=G.enemies.filter(e=>e.alive).sort((p,q)=>d2(a.x,a.z,p.x,p.z)-d2(a.x,a.z,q.x,q.z))[0];
+  const near=e&&(d2(a.x,a.z,e.x,e.z)<110 || d2(e.x,e.z,G.nest.x,G.nest.z)<150);
+  if(near){ doAttack(a,e,dt); return; }
+  if(G.raidActive&&G.rival.alive){ doRaid(a,dt); return; }
+  // patrol around hold point or nest
+  const hx=a.hold?a.hold.x:G.nest.x, hz=a.hold?a.hold.z:G.nest.z;
+  const px=hx+Math.cos(G.time*.8+a.wob)*16, pz=hz+Math.sin(G.time*.8+a.wob)*16;
+  moveTo(a,px,pz,a.speed*.5,dt,2);
+}
+function doAttack(a,e,dt){
+  if(!e.alive){a.order=null;return;}
+  if(moveTo(a,e.x,e.z,a.speed,dt,6)){}
+  if(d2(a.x,a.z,e.x,e.z)<8&&a.atkCd<=0){ e.hp-=rndI(9,16)+builtOf('barracks').length*3; e.flash=1; a.atkCd=.4; burst(e.x,e.z,0xf5b842,4); G.shake=Math.min(2,(G.shake||0)+.3);
+    if(e.hp<=0){ e.alive=false; burst(e.x,e.z,0xcc3322,12); floatText(e.x,6,e.z,'down!','#f5b842'); if(a.order&&a.order.type==='attack')a.order=null; } }
+}
+function doRaid(a,dt){
+  const r=G.rival; if(!r.alive){a.order=null;return;}
+  if(moveTo(a,r.x,r.z,a.speed,dt,16)){}
+  if(d2(a.x,a.z,r.x,r.z)<20&&a.atkCd<=0){ r.hp-=rndI(6,12); a.atkCd=.5; burst(r.x,r.z,0xf5b842,4); G.shake=Math.min(2,(G.shake||0)+.2); if(r.hp<=0)crushRival(); }
+}
+function idle(a,dt){a.wob+=dt;a.x+=Math.cos(a.wob)*dt*.5;a.z+=Math.sin(a.wob*1.3)*dt*.3;}
+
+// ---------- enemies ----------
+function tickEnemies(dt){
+  const q=G.queen;
+  for(const e of G.enemies){
+    if(!e.alive)continue;
+    e.wob+=dt*9;e.flash=Math.max(0,e.flash-dt*8);e.atkCd=Math.max(0,e.atkCd-dt);
+    // attack adjacent ant
+    let na=null,bd=1e9;for(const a of G.ants){if(!a.alive)continue;const d=d2(e.x,e.z,a.x,a.z);if(d<bd){bd=d;na=a;}}
+    if(na&&bd<7){ if(e.atkCd<=0){na.hp-=e.atk;na.flash=1;e.atkCd=.7;if(na.hp<=0){na.alive=false;if(na.fetchEgg){na.fetchEgg.claimed=null;}if(na.carryEgg){na.carryEgg.carrier=null;na.carryEgg.claimed=null;na.carryEgg.x=G.nest.x;na.carryEgg.z=G.nest.z;na.carryEgg.y=12;}scene.remove(na.view.g);burst(na.x,na.z,0xcc3322,8);}} continue; }
+    // attack wall if blocking
+    const wall=collideWalls(e,4);
+    if(wall){ if(e.atkCd<=0){ wall.hp-=e.atk; e.atkCd=.7; burst(wall.x,wall.z,0xcc7744,3); if(wall.hp<=0){scene.remove(wall.view.g);G.cells.delete(cellKey(wall.gx,wall.gz));const i=G.builds.indexOf(wall);if(i>=0)G.builds.splice(i,1);} } }
+    // head to queen
+    if(d2(e.x,e.z,q.x,q.z)<10){ if(e.atkCd<=0){q.hp-=e.atk;e.atkCd=.8;G.shake=Math.min(3,(G.shake||0)+.5);floatText(q.x,10,q.z,'-'+e.atk,'#cc3322');} }
+    else moveTo(e,q.x,q.z,e.speed,dt,8);
+    e.x=clamp(e.x,-BOUND,BOUND);e.z=clamp(e.z,-BOUND,BOUND);
+  }
+  G.enemies=G.enemies.filter(e=>{if(!e.alive){scene.remove(e.view.g);return false;}return true;});
+}
+
+// ---------- towers ----------
+function tickTowers(dt){
+  for(const b of builtOf('tower')){
+    b.cd=(b.cd||0)-dt;
+    if(b.cd<=0){
+      const e=G.enemies.filter(e=>e.alive&&d2(b.x,b.z,e.x,e.z)<130).sort((p,q)=>d2(b.x,b.z,p.x,p.z)-d2(b.x,b.z,q.x,q.z))[0];
+      if(e){ e.hp-=rndI(10,18); e.flash=1; b.cd=.8; burst(e.x,e.z,0xffd24a,5); for(let i=0;i<4;i++)burst(lerp(b.x,e.x,i/4),lerp(b.z,e.z,i/4),0xffd24a,1,6,18); if(e.hp<=0){e.alive=false;burst(e.x,e.z,0xcc3322,10);} }
+      else b.cd=.3;
+    }
+  }
+}
+
+// ---------- colony / queen / hatch ----------
+function tickColony(dt){
+  const q=G.queen; q.layCd-=dt;
+  const maxEggs=2+builtOf('nursery').length*2;
+  if(q.layCd<=0 && G.eggs.length<maxEggs && G.food>=6){ G.food-=6; layEgg(); q.layCd=6;
+    if(builtOf('nursery').length===0 && !G.nurseHint){ G.nurseHint=true; ticker('An egg is on the nest. Build a nursery so ants can hatch it.','#f5d76a'); } }
+  for(let i=G.hatch.length-1;i>=0;i--){ const h=G.hatch[i]; h.t-=dt; if(h.t<=0){ addAnt(h.kind); burst(h.x,h.z,0xf5b842,8); floatText(h.x,8,h.z,h.kind==='soldier'?'soldier!':'ant!', '#f5b842'); G.hatch.splice(i,1); } }
+  G.food=Math.min(foodCap(),G.food+builtOf('fungus').length*2*dt);
+  // upkeep disabled in test mode
+  if(builtOf('barracks').length>0)for(const a of G.ants){if(a.alive&&a.role==='soldier')a.hp=Math.min(a.maxHp,a.hp+5*dt);}
+  if(G.foods.filter(f=>f.amount>0).length<6 && Math.random()<dt*0.3) addFood(rnd(-HALF+60,HALF-60),rnd(-HALF+60,HALF-60));
+}
+
+// ---------- phase / rival ----------
+function tickPhase(dt){
+  if(G.phase==='dormant'){
+    // wake the rival once any ant crosses into its territory (or you order a raid)
+    let intruder=false;
+    for(const a of G.ants){ if(a.alive && d2(a.x,a.z,G.rival.x,G.rival.z)<RIVAL_TRIGGER){ intruder=true; break; } }
+    if(intruder || G.raidActive) startWar();
+    return;
+  }
+  const r=G.rival;
+  if(!r.alive){ r.respawn-=dt; if(r.respawn<=0){ r.alive=true; r.level++; r.maxHp=120+r.level*45; r.hp=r.maxHp; G.raidActive=false; dangerZone.visible=false; ticker('A stronger rival colony rises (Lv '+r.level+').','#f0a890'); } return; }
+  G.raidTimer-=dt; const interval=Math.max(9,24-r.level*1.5);
+  if(G.raidTimer<=3&&!G.raidWarn){G.raidWarn=true;ticker('Rival raiders approaching!','#e06050');}
+  if(G.raidTimer<=0){ const n=1+Math.floor(r.level*0.9+Math.random()*1.5); for(let i=0;i<n;i++)setTimeout(()=>{if(G&&!G.over&&G.rival.alive)addEnemy();},i*350); G.raidTimer=interval;G.raidWarn=false; ticker('Raid: '+n+' bug(s) incoming!','#cc3322'); }
+}
+function startWar(){ if(G.phase==='war')return; G.phase='war';G.raidTimer=6; dangerZone.visible=false; const b=document.getElementById('banner');b.classList.remove('peace');b.classList.add('war'); ticker('You woke the rival colony! Defend the queen.','#f0a890'); }
+function crushRival(){ const r=G.rival;r.alive=false;r.respawn=18;G.raidActive=false; burst(r.x,r.z,0xf5b842,26); for(const a of G.ants)if(a.order&&a.order.type==='raid')a.order=null; ticker('Rival nest destroyed! They will rebuild stronger. Keep growing!','#7bc455'); }
+
+// ---------- build placement ----------
+function finishBuild(b){ burst(b.x,b.z,0xf5b842,10); ticker(b.kind+' complete!','#7bc455'); updateHUD(); }
+function cellValid(gx,gz){
+  if(G.cells.has(cellKey(gx,gz))) return false;
+  if(d2(gx,gz,G.nest.x,G.nest.z)<GRID*1.4) return false;
+  if(d2(gx,gz,G.rival.x,G.rival.z)<GRID*1.6) return false;
+  if(Math.abs(gx)>BOUND||Math.abs(gz)>BOUND) return false;
+  return true;
+}
+function placeBuild(kind,wx,wz){
+  const gx=snap(wx), gz=snap(wz);
+  if(!cellValid(gx,gz)){ ticker('Cannot build there.','#e06050'); return; }
+  if(G.sand<COST[kind]){ ticker('Need '+COST[kind]+' sand.','#e06050'); return; }
+  G.sand-=COST[kind]; G.cells.add(cellKey(gx,gz));
+  const v=buildStruct(kind);
+  // store solid materials then switch to ghost while building
+  v.g.traverse(o=>{ if(o.isMesh){ o.userData.solid=o.material; o.material=M.ghost; o.castShadow=false; } });
+  v.g.position.set(gx,0,gz); scene.add(v.g);
+  G.builds.push({kind,x:gx,z:gz,gx,gz,built:false,prog:0,hp:kind==='wall'?60:100,view:v});
+  ticker(kind+' placed. Ants will build it.','#cdb070'); updateHUD();
+}
+
+// ---------- effects on build completion: restore solids ----------
+// (handled inline in doBuild via traverse)
+
+// ===================================================================
+//  RENDER SYNC
+// ===================================================================
+function sync(dt){
+  for(const a of G.ants){ if(!a.alive)continue; const v=a.view;
+    v.g.position.set(a.x,0,a.z);
+    a.hv=lerpAng(a.hv||0,a.heading,0.2); v.g.rotation.y=a.hv;
+    v.body.position.y=Math.sin(a.wob*2)*0.25;
+    for(let i=0;i<v.legs.length;i++){const p=v.legs[i];p.rotation.x=Math.sin(a.wob*2.4+p.userData.ph+(p.userData.side<0?0:Math.PI))*0.5;}
+    v.carry.visible=a.carryFood>0;
+    v.ring.visible=G.sel.includes(a);
+    v.g.scale.setScalar((a.role==='soldier'?1.3:1.0)*(a.flash>0?1.12:1));
+    if(a.carryEgg){ a.carryEgg.mesh.position.set(a.x,7+Math.sin(a.wob*2)*0.4,a.z); }
+  }
+  for(const e of G.enemies){ if(!e.alive)continue; const v=e.view;
+    v.g.position.set(e.x,0,e.z); e.hv=lerpAng(e.hv||0,e.heading,0.18); v.g.rotation.y=e.hv;
+    v.body.position.y=Math.sin(e.wob*2)*0.2;
+    for(let i=0;i<v.legs.length;i++){const p=v.legs[i];p.rotation.x=Math.sin(e.wob*2.2+p.userData.ph)*0.4;}
+  }
+  // loose eggs sit on the nest, pulsing
+  for(const eg of G.eggs){ if(eg.carrier)continue; const s=1+Math.sin(G.time*4+eg.x)*0.08; eg.mesh.scale.set(1.3*s,1.8*s,1.3*s); eg.mesh.position.set(eg.x,12+Math.sin(G.time*2+eg.z)*0.4,eg.z); }
+  // gentle terrain sway (grass + tree canopies)
+  for(const c of G.clutter){ if(c.removed)continue; c.view.g.rotation.z=Math.sin(G.time*1.3+c.x*0.1)*0.04; }
+  // danger zone gentle pulse while dormant
+  if(G.phase==='dormant'){ dangerZone.material.opacity=0.1+Math.sin(G.time*2)*0.04; }
+  // food scale by amount
+  for(const f of G.foods){ const k=clamp(f.amount/40,0.25,1); f.view.g.scale.setScalar(0.5+k*0.7); }
+}
+
+// ===================================================================
+//  INPUT  (selection, commands, camera)
+// ===================================================================
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
+let pdown=false, pmoved=false, panning=false, sx0=0, sy0=0, lx=0, ly=0, btn=0, touches=0;
+const selbox=document.getElementById('selbox');
+
+function pickList(){
+  const arr=[ground];
+  for(const a of G.ants)if(a.alive)arr.push(a.view.body);
+  for(const e of G.enemies)if(e.alive)arr.push(e.view.body);
+  for(const f of G.foods)arr.push(f.view.hit);
+  for(const c of G.clutter)if(!c.removed)arr.push(c.view.hit);
+  for(const b of G.builds)if(b.view.pick)arr.push(b.view.pick);
+  arr.push(...rivalView.children.filter(o=>o.isMesh));
+  return arr;
+}
+function tagRefs(){
+  for(const a of G.ants)if(a.alive){a.view.body.userData={kind:a.role==='soldier'?'soldier':'ant',ref:a};}
+  for(const e of G.enemies)if(e.alive){e.view.body.userData={kind:'enemy',ref:e};}
+  for(const f of G.foods){f.view.hit.userData={kind:'food',ref:f};}
+  for(const c of G.clutter)if(!c.removed){c.view.hit.userData={kind:'clutter',ref:c};}
+  for(const b of G.builds)if(b.view.pick){b.view.pick.userData={kind:'build',ref:b};}
+}
+function rayAt(px,py){const r=stage.getBoundingClientRect();ndc.set(((px-r.left)/r.width)*2-1,-((py-r.top)/r.height)*2+1);ray.setFromCamera(ndc,camera);}
+function groundPoint(px,py){rayAt(px,py);const hit=ray.intersectObject(ground)[0];return hit?hit.point:null;}
+
+stage.addEventListener('pointerdown',ev=>{ if(!G||G.over)return; pdown=true;pmoved=false;btn=ev.button;sx0=lx=ev.clientX;sy0=ly=ev.clientY;
+  if(ev.button===2){panning=true;} });
+stage.addEventListener('pointermove',ev=>{
+  if(G&&G.buildMode&&!pdown){
+    const p=groundPoint(ev.clientX,ev.clientY);
+    if(!p){ ghostTile.visible=false; }
+    else { const gx=snap(p.x),gz=snap(p.z); ghostTile.visible=true; ghostTile.position.set(gx,0.3,gz);
+      const ok=cellValid(gx,gz)&&G.sand>=COST[G.buildMode]; ghostTile.material.color.setHex(ok?0x66ff66:0xff5544); }
+  }
+  if(!pdown)return; const dx=ev.clientX-lx,dy=ev.clientY-ly;lx=ev.clientX;ly=ev.clientY;
+  if(Math.hypot(ev.clientX-sx0,ev.clientY-sy0)>6)pmoved=true;
+  if(panning||touches>=2){ panCam(-dx,-dy); return; }
+  if(pmoved && btn===0 && !G.buildMode){
+    selbox.style.display='block';
+    const x=Math.min(ev.clientX,sx0),y=Math.min(ev.clientY,sy0),w=Math.abs(ev.clientX-sx0),h=Math.abs(ev.clientY-sy0);
+    const r=stage.getBoundingClientRect();
+    selbox.style.left=(x-r.left)+'px';selbox.style.top=(y-r.top)+'px';selbox.style.width=w+'px';selbox.style.height=h+'px';
+  }
+});
+window.addEventListener('pointerup',ev=>{
+  if(!pdown)return; pdown=false; const wasPan=panning; panning=false; selbox.style.display='none';
+  if(!G||G.over)return;
+  if(wasPan)return;
+  if(pmoved && btn===0 && !G.buildMode){ boxSelect(sx0,sy0,ev.clientX,ev.clientY); return; }
+  if(!pmoved){ handleTap(ev.clientX,ev.clientY); }
+});
+// right-click cancels build mode; if not in build mode, ignore
+stage.addEventListener('contextmenu',e=>{e.preventDefault(); if(G&&G.buildMode)setBuild(null);});
+stage.addEventListener('wheel',e=>{e.preventDefault();camCfg.dist=clamp(camCfg.dist*(1+Math.sign(e.deltaY)*0.1),90,360);},{passive:false});
+stage.addEventListener('touchstart',e=>{touches=e.touches.length;});
+stage.addEventListener('touchend',e=>{touches=e.touches.length;});
+stage.addEventListener('touchmove',e=>{ if(e.touches.length===2){e.preventDefault();
+  const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+  if(window._pd)camCfg.dist=clamp(camCfg.dist*(window._pd/d),90,360); window._pd=d; pmoved=true;} },{passive:false});
+stage.addEventListener('touchend',()=>{window._pd=0;});
+document.getElementById('zin').onclick=()=>camCfg.dist=clamp(camCfg.dist*0.85,90,360);
+document.getElementById('zout').onclick=()=>camCfg.dist=clamp(camCfg.dist*1.18,90,360);
+
+function panCam(dx,dy){ const r=camRight(),f=camFwd(),k=camCfg.dist*0.0016;
+  camCfg.tx=clamp(camCfg.tx+(r.x*dx+f.x*dy)*k,-BOUND,BOUND);
+  camCfg.tz=clamp(camCfg.tz+(r.z*dx+f.z*dy)*k,-BOUND,BOUND); }
+const keys={};
+window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true; if(e.key==='Escape')setBuild(null);});
+window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+function keyPan(dt){ let dx=0,dz=0; if(keys['a']||keys['arrowleft'])dx-=1; if(keys['d']||keys['arrowright'])dx+=1; if(keys['w']||keys['arrowup'])dz-=1; if(keys['s']||keys['arrowdown'])dz+=1;
+  if(dx||dz){ const r=camRight(),f=camFwd(),k=camCfg.dist*1.4*dt; camCfg.tx=clamp(camCfg.tx+(r.x*dx-f.x*dz)*k,-BOUND,BOUND); camCfg.tz=clamp(camCfg.tz+(r.z*dx-f.z*dz)*k,-BOUND,BOUND);} }
+
+// ---------- selection ----------
+function selectGroup(a){ clearSel(); const r=60; for(const o of G.ants)if(o.alive&&o.role===a.role&&d2(a.x,a.z,o.x,o.z)<r)G.sel.push(o); ticker(G.sel.length+' '+(a.role==='soldier'?'soldier':'ant')+'(s) selected.','#cfe9b0'); }
+function boxSelect(x0,y0,x1,y1){ clearSel(); const minx=Math.min(x0,x1),maxx=Math.max(x0,x1),miny=Math.min(y0,y1),maxy=Math.max(y0,y1);
+  const r=stage.getBoundingClientRect();
+  for(const a of G.ants){ if(!a.alive)continue; const p=project(a.x,2,a.z); const sxp=p.x+r.left,syp=p.y+r.top;
+    if(p.front&&sxp>=minx&&sxp<=maxx&&syp>=miny&&syp<=maxy)G.sel.push(a); }
+  G.selEgg=null; ticker(G.sel.length?G.sel.length+' ant(s) selected.':'Nothing selected.', G.sel.length?'#cfe9b0':'#9a7a50'); }
+function clearSel(){ G.sel=[]; G.selEgg=null; }
+
+function handleTap(px,py){
+  if(G.buildMode){ const p=groundPoint(px,py); if(p)placeBuild(G.buildMode,p.x,p.z); return; }
+  tagRefs(); rayAt(px,py);
+  const hits=ray.intersectObjects(pickList(),false);
+  let ud=null,point=null;
+  for(const h of hits){ let o=h.object; let u=o.userData; if(!u||!u.kind){let p=o;while(p&&(!p.userData||!p.userData.kind))p=p.parent;u=p?p.userData:null;} if(u&&u.kind){ud=u;point=h.point;break;} }
+  if(!ud){ clearSel(); return; }
+  if(ud.kind==='ant'||ud.kind==='soldier'){ selectGroup(ud.ref); return; }
+  // tapping a built nursery or barracks sets where ALL new eggs go, until you tap the other one
+  if(ud.kind==='build' && ud.ref.built && (ud.ref.kind==='nursery'||ud.ref.kind==='barracks')){
+    const dest=ud.ref.kind;
+    G.eggDest=dest;
+    // re-route any eggs not yet delivered
+    for(const e of G.eggs){ if(!e.carrier){ e.dest=dest; e.claimed=null; } }
+    ticker('Eggs now go to the '+dest+(dest==='barracks'?' (soldiers).':' (workers).'), '#7bc455');
+    return;
+  }
+  // commands for selected ants
+  if(G.sel.length){
+    if(ud.kind==='food'){ for(const a of G.sel)if(a.role!=='soldier')a.order={type:'gather',f:ud.ref}; ticker('Gathering food.','#7bc455'); }
+    else if(ud.kind==='clutter'){ for(const a of G.sel)if(a.role!=='soldier')a.order={type:'clear',c:ud.ref}; ticker('Clearing brush for sand.','#7bc455'); }
+    else if(ud.kind==='build'){ const b=ud.ref; if(!b.built){ for(const a of G.sel)if(a.role!=='soldier')a.order={type:'build',b}; ticker('Building.','#7bc455'); } }
+    else if(ud.kind==='enemy'){ for(const a of G.sel)if(a.role==='soldier')a.order={type:'attack',e:ud.ref}; ticker('Attacking!','#f0a890'); }
+    else { // ground or rival
+      const isRival = point && d2(point.x,point.z,G.rival.x,G.rival.z)<26 && G.rival.alive;
+      if(isRival){ G.raidActive=true; for(const a of G.sel)if(a.role==='soldier')a.order={type:'raid'}; ticker('Raid! Soldiers march on the rival.','#f0a890'); }
+      else if(point){ for(const a of G.sel)a.order={type:'move',x:point.x,z:point.z}; burst(point.x,point.z,0x9be86a,5,10,2); }
+    }
+    return;
+  }
+  clearSel();
+}
+
+// ---------- build buttons ----------
+function setBuild(k){
+  G&&(G.buildMode=k);
+  stage.style.cursor=k?'copy':'crosshair';
+  gridHelper.visible=!!k; if(!k)ghostTile.visible=false;
+  document.querySelectorAll('#builds .b[data-build]').forEach(b=>b.classList.toggle('active',b.dataset.build===k));
+  document.getElementById('cancelbuild').style.display=k?'inline-flex':'none';
+}
+document.querySelectorAll('#builds .b[data-build]').forEach(b=>b.onclick=()=>setBuild(G&&G.buildMode===b.dataset.build?null:b.dataset.build));
+document.getElementById('cancelbuild').onclick=()=>setBuild(null);
+document.getElementById('sel-ants').onclick=()=>{ if(!G)return; G.sel=G.ants.filter(a=>a.alive&&a.role==='ant'); G.selEgg=null; ticker(G.sel.length+' ants selected.','#cfe9b0'); };
+document.getElementById('sel-sol').onclick=()=>{ if(!G)return; G.sel=G.ants.filter(a=>a.alive&&a.role==='soldier'); G.selEgg=null; ticker(G.sel.length+' soldiers selected.','#cfe9b0'); };
+document.getElementById('ready').onclick=()=>{ if(G&&G.phase==='dormant')startWar(); };
+document.getElementById('replay').onclick=startGame;
+
+// ---------- HUD ----------
+function ticker(m,c){const el=document.getElementById('ticker');el.innerHTML='<b>'+m+'</b>';el.style.color=c||'#9a7a50';}
+function updateHUD(){ if(!G)return;
+  const ants=G.ants.filter(a=>a.alive&&a.role==='ant').length, sol=G.ants.filter(a=>a.alive&&a.role==='soldier').length;
+  document.getElementById('r-food').textContent=Math.floor(G.food)+'/'+foodCap();
+  document.getElementById('r-sand').textContent=Math.floor(G.sand);
+  document.getElementById('r-eggs').textContent=G.eggs.length+G.hatch.length;
+  document.getElementById('r-ants').textContent=ants;
+  document.getElementById('r-sol').textContent=sol;
+  document.querySelectorAll('#builds .b[data-build]').forEach(b=>{if(COST[b.dataset.build]!==undefined)b.disabled=G.sand<COST[b.dataset.build];});
+  document.getElementById('rf').style.width=(G.rival.alive?G.rival.hp/G.rival.maxHp*100:0)+'%';
+  document.getElementById('rlv').textContent='Lv '+G.rival.level;
+}
+function updateBanner(){ if(!G)return;
+  if(G.phase==='dormant'){document.getElementById('btext').textContent='Peaceful build-up — rival dormant';document.getElementById('btime').textContent='';}
+  else{document.getElementById('btext').textContent=G.raidActive?'Raiding the rival':'Defend the colony';document.getElementById('btime').textContent='';}
+}
+function checkEnd(){ if(G.over)return;
+  if(G.queen.hp<=0){G.over=true;over('The queen has fallen','Without her the colony scatters. Build a stronger guard next time.','#cc3322');return;}
+  if(G.ants.filter(a=>a.alive).length<=0&&G.eggs.length<=0&&G.hatch.length<=0){G.over=true;over('Colony lost','No ants remain. Keep some safe at home next time.','#cc3322');}
+}
+function over(t,m,c){document.getElementById('ovt').textContent=t;document.getElementById('ovt').style.color=c;document.getElementById('ovm').textContent=m;document.getElementById('ov').classList.add('show');}
+
+// ---------- resize ----------
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
+window.addEventListener('resize',resize);
+
+// ---------- queen hp bar via float (simple) ----------
+let qbarEl=document.createElement('div');qbarEl.className='float';qbarEl.style.fontSize='.7rem';labels.appendChild(qbarEl);
+
+// ===================================================================
+//  LOOP
+// ===================================================================
+function loop(){
+  requestAnimationFrame(loop);
+  const dt=Math.min(clock.getDelta(),0.05);
+  if(G&&!G.over){
+    G.time+=dt; keyPan(dt);
+    try{tickPhase(dt);}catch(e){console.error('phase',e);}
+    try{tickColony(dt);}catch(e){console.error('colony',e);}
+    try{tickAnts(dt);}catch(e){console.error('ants',e);}
+    try{tickEnemies(dt);}catch(e){console.error('enemies',e);}
+    try{tickTowers(dt);}catch(e){console.error('towers',e);}
+    try{sync(dt);}catch(e){console.error('sync',e);}
+    try{tickParticles(dt);tickFloats(dt);}catch(e){console.error('fx',e);}
+    G._h=(G._h||0)+dt; if(G._h>0.2){updateHUD();updateBanner();G._h=0;}
+    checkEnd();
+    // nest / queen hp label
+    const qp=project(G.queen.x,20,G.queen.z);
+    if(qp.front&&G.queen.hp<G.queen.maxHp){qbarEl.style.display='block';qbarEl.style.left=qp.x+'px';qbarEl.style.top=qp.y+'px';qbarEl.style.color='#ffcf6a';qbarEl.textContent='👑 '+Math.max(0,Math.ceil(G.queen.hp))+'/'+G.queen.maxHp;}
+    else qbarEl.style.display='none';
+  }
+  placeCam();
+  if(G&&G.shake>0.05){camera.position.x+=rnd(-G.shake,G.shake);camera.position.y+=rnd(-G.shake,G.shake);G.shake*=0.85;}
+  try{renderer.render(scene,camera);}catch(e){console.error('render',e);}
+}
+resize(); startGame(); loop();
+window.startGame=startGame;
+}
+</script>
+</body>
+</html>
