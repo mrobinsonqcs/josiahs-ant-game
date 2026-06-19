@@ -160,6 +160,9 @@ const M={
   redeye:new THREE.MeshStandardMaterial({color:0xcc3344,emissive:0x551016}),
   ghost:new THREE.MeshStandardMaterial({color:0x88ff88,transparent:true,opacity:.4}),
 };
+const _sharedMats=new Set(Object.values(M));
+const _sharedGeos=new Set([G_,G_leg,G_cone,G_box,G_cyl,G_ring]);
+function disposeGroup(g){g.traverse(o=>{if(!o.isMesh)return;if(o.geometry&&!_sharedGeos.has(o.geometry))o.geometry.dispose();const m=o.material;if(m&&!_sharedMats.has(m))m.dispose();const s=o.userData.solid;if(s&&!_sharedMats.has(s))s.dispose();});}
 function sph(mat,sx,sy,sz,x,y,z,sh){const m=new THREE.Mesh(G_,mat);m.scale.set(sx,sy,sz);m.position.set(x,y,z);if(sh)m.castShadow=true;return m;}
 
 // ---------- ant / soldier / queen models ----------
@@ -254,8 +257,9 @@ function buildNestMound(){
 }
 function buildRival(){
   const g=new THREE.Group();
-  for(let i=0;i<4;i++){const r=20-i*4;const m=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x3a1a12,roughness:1}));m.scale.set(r,5,r);m.position.y=i*3+2.5;m.castShadow=true;g.add(m);}
-  const hole=new THREE.Mesh(new THREE.CircleGeometry(6,20),new THREE.MeshBasicMaterial({color:0x1a0000}));hole.rotation.x=-Math.PI/2;hole.position.y=14.6;g.add(hole);
+  for(let i=0;i<4;i++){const r=20-i*4;const mat=new THREE.MeshStandardMaterial({color:0x3a1a12,roughness:1});const m=new THREE.Mesh(G_cyl,mat);m.scale.set(r,5,r);m.position.y=i*3+2.5;m.castShadow=true;m.userData.origMat=mat;g.add(m);}
+  const hmat=new THREE.MeshBasicMaterial({color:0x1a0000});
+  const hole=new THREE.Mesh(new THREE.CircleGeometry(6,20),hmat);hole.rotation.x=-Math.PI/2;hole.position.y=14.6;hole.userData.origMat=hmat;g.add(hole);
   const light=new THREE.PointLight(0xcc3322,.7,90,2);light.position.set(0,8,0);g.add(light);
   return g;
 }
@@ -291,7 +295,7 @@ function buildClutter(){
 }
 function barePatch(x,z){
   const m=new THREE.Mesh(new THREE.CircleGeometry(rnd(7,10),16),new THREE.MeshStandardMaterial({color:0x6a4a2a,roughness:1}));
-  m.rotation.x=-Math.PI/2; m.position.set(x,0.16,z); m.receiveShadow=true; scene.add(m);
+  m.rotation.x=-Math.PI/2; m.position.set(x,0.16,z); m.receiveShadow=true; scene.add(m); G.patches.push(m);
 }
 function buildEggMesh(){const m=new THREE.Mesh(G_,M.egg);m.scale.set(1.3,1.8,1.3);m.castShadow=true;return m;}
 
@@ -327,22 +331,29 @@ const cellKey=(gx,gz)=>gx+'_'+gz;
 
 function startGame(){
   // clear
-  if(G){ for(const a of G.ants)scene.remove(a.view.g); for(const e of G.enemies)scene.remove(e.view.g);
-    for(const b of G.builds)scene.remove(b.view.g); for(const f of G.foods)scene.remove(f.view.g);
-    for(const c of G.clutter)scene.remove(c.view.g); for(const e of G.eggs)scene.remove(e.mesh); }
+  if(G){ for(const a of G.ants){disposeGroup(a.view.g);scene.remove(a.view.g);}
+    for(const e of G.enemies){disposeGroup(e.view.g);scene.remove(e.view.g);}
+    for(const b of G.builds){disposeGroup(b.view.g);scene.remove(b.view.g);}
+    for(const f of G.foods){disposeGroup(f.view.g);scene.remove(f.view.g);}
+    for(const c of G.clutter){disposeGroup(c.view.g);scene.remove(c.view.g);}
+    for(const e of G.eggs)scene.remove(e.mesh);
+    for(const p of G.patches){p.geometry.dispose();p.material.dispose();scene.remove(p);}
+  }
   for(const f of floats)f.el.remove(); floats.length=0;
   document.getElementById('ov').classList.remove('show');
 
   const nest={x:-320,z:100}, rival={x:320,z:-100};
   nestMound.position.set(nest.x,0,nest.z);
+  rivalView.scale.set(1,1,1);
+  rivalView.traverse(o=>{if(o.isMesh&&o.userData.origMat)o.material=o.userData.origMat;});
   rivalView.position.set(rival.x,0,rival.z);
   dangerZone.position.set(rival.x,0.2,rival.z); dangerZone.visible=true;
 
-  G={ food:9999, sand:9999, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], eggs:[], hatch:[], cells:new Set(),
+  G={ food:9999, sand:9999, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], eggs:[], hatch:[], cells:new Set(), patches:[],
     queen:{x:nest.x,z:nest.z,hp:160,maxHp:160,layCd:5},
     rival:{x:rival.x,z:rival.z,hp:120,maxHp:120,level:1,alive:true,respawn:0},
     phase:'dormant', raidTimer:0, raidWarn:false, raidActive:false,
-    sel:[], selEgg:null, buildMode:null, over:false, time:0, nurseHint:false, eggDest:'nursery' };
+    sel:[], selEgg:null, buildMode:null, over:false, time:0, shake:0, _h:0, nurseHint:false, eggDest:'nursery' };
 
   for(let i=0;i<5;i++) addAnt('ant');
   addAnt('soldier'); addAnt('soldier');
@@ -351,7 +362,7 @@ function startGame(){
   // dense vegetation covering most of the map
   for(let i=0;i<80;i++) addClutter(rnd(-HALF+60,HALF-60),rnd(-HALF+60,HALF-60));
 
-  camCfg.tx=nest.x; camCfg.tz=nest.z; placeCam();
+  camCfg.yaw=0.6; camCfg.phi=0.92; camCfg.dist=190; camCfg.tx=nest.x; camCfg.tz=nest.z; placeCam();
   const ban=document.getElementById('banner'); ban.classList.remove('war'); ban.classList.add('peace');
   document.getElementById('ready').style.display='none';
   setBuild(null); ticker('Click food to gather or brush to clear — nearest free ant goes automatically!','#b9e08a'); updateHUD();
@@ -370,7 +381,7 @@ function addEnemy(){const v=buildEnemy();const r=G.rival;v.g.position.set(r.x+rn
   const lv=r.level;G.enemies.push({x:v.g.position.x,z:v.g.position.z,hp:30+lv*10,maxHp:30+lv*10,speed:20+lv*1.5,atk:7+lv*2,
     alive:true,heading:0,wob:rnd(0,7),flash:0,atkCd:0,view:v});}
 function addFood(x,z){ if(G&&d2(x,z,G.rival.x,G.rival.z)<RIVAL_TRIGGER+50)return; const v=buildFood();v.g.position.set(x,0,z);scene.add(v.g);G.foods.push({x,z,amount:rndI(20,40),view:v});}
-function addClutter(x,z){if(d2(x,z,-150,60)<34)return; if(G&&d2(x,z,G.rival.x,G.rival.z)<RIVAL_TRIGGER+40)return; const v=buildClutter();v.g.position.set(x,0,z);scene.add(v.g);G.clutter.push({x,z,view:v});}
+function addClutter(x,z){if(d2(x,z,G.nest.x,G.nest.z)<34)return; if(G&&d2(x,z,G.rival.x,G.rival.z)<RIVAL_TRIGGER+40)return; const v=buildClutter();v.g.position.set(x,0,z);scene.add(v.g);G.clutter.push({x,z,view:v});}
 function layEgg(){const v=buildEggMesh();const n=G.nest;const x=n.x+rnd(-6,6),z=n.z+rnd(-6,6);v.position.set(x,12,z);scene.add(v);
   G.eggs.push({x,z,y:12,dest:G.eggDest||'nursery',carrier:null,claimed:null,mesh:v});burst(n.x,n.z,0xf5b842,5,18,12);}
 
@@ -487,7 +498,7 @@ function tickEnemies(dt){
     e.wob+=dt*9;e.flash=Math.max(0,e.flash-dt*8);e.atkCd=Math.max(0,e.atkCd-dt);
     // attack adjacent ant
     let na=null,bd=1e9;for(const a of G.ants){if(!a.alive)continue;const d=d2(e.x,e.z,a.x,a.z);if(d<bd){bd=d;na=a;}}
-    if(na&&bd<7){ if(e.atkCd<=0){na.hp-=e.atk;na.flash=1;e.atkCd=.7;if(na.hp<=0){na.alive=false;if(na.fetchEgg){na.fetchEgg.claimed=null;}if(na.carryEgg){na.carryEgg.carrier=null;na.carryEgg.claimed=null;na.carryEgg.x=G.nest.x;na.carryEgg.z=G.nest.z;na.carryEgg.y=12;}scene.remove(na.view.g);burst(na.x,na.z,0xcc3322,8);}} continue; }
+    if(na&&bd<7){ if(e.atkCd<=0){na.hp-=e.atk;na.flash=1;e.atkCd=.7;if(na.hp<=0){na.alive=false;if(na.fetchEgg){na.fetchEgg.claimed=null;}if(na.carryEgg){na.carryEgg.carrier=null;na.carryEgg.claimed=null;na.carryEgg.x=G.nest.x;na.carryEgg.z=G.nest.z;na.carryEgg.y=12;}scene.remove(na.view.g);disposeGroup(na.view.g);burst(na.x,na.z,0xcc3322,8);const _ai=G.ants.indexOf(na);if(_ai>=0)G.ants.splice(_ai,1);}} }
     // attack wall if blocking
     const wall=collideWalls(e,4);
     if(wall){ if(e.atkCd<=0){ wall.hp-=e.atk; e.atkCd=.7; burst(wall.x,wall.z,0xcc7744,3); if(wall.hp<=0){scene.remove(wall.view.g);G.cells.delete(cellKey(wall.gx,wall.gz));const i=G.builds.indexOf(wall);if(i>=0)G.builds.splice(i,1);} } }
@@ -540,7 +551,14 @@ function tickPhase(dt){
   if(G.raidTimer<=0){ const n=1+Math.floor(r.level*0.9+Math.random()*1.5); for(let i=0;i<n;i++)setTimeout(()=>{if(G&&!G.over&&G.rival.alive)addEnemy();},i*350); G.raidTimer=interval;G.raidWarn=false; ticker('Raid: '+n+' bug(s) incoming!','#cc3322'); }
 }
 function startWar(){ if(G.phase==='war')return; G.phase='war';G.raidTimer=6; dangerZone.visible=false; const b=document.getElementById('banner');b.classList.remove('peace');b.classList.add('war'); ticker('You woke the rival colony! Defend the queen.','#f0a890'); }
-function crushRival(){ const r=G.rival;r.alive=false;r.respawn=18;G.raidActive=false; burst(r.x,r.z,0xf5b842,26); for(const a of G.ants)if(a.order&&a.order.type==='raid')a.order=null; ticker('Rival nest destroyed! They will rebuild stronger. Keep growing!','#7bc455'); }
+function crushRival(){ const r=G.rival;r.alive=false;r.respawn=18;G.raidActive=false;
+  burst(r.x,r.z,0xf5b842,30,50,10);
+  for(let i=0;i<5;i++) burst(r.x+rnd(-18,18),r.z+rnd(-18,18),0xcc3322,10,40,rnd(2,16));
+  rivalView.scale.y=0.14;
+  const deadMat=new THREE.MeshStandardMaterial({color:0x111109,roughness:1});
+  rivalView.traverse(o=>{if(o.isMesh)o.material=deadMat;});
+  for(const a of G.ants)if(a.order&&a.order.type==='raid')a.order=null;
+  ticker('Rival nest destroyed! They will rebuild stronger. Keep growing!','#7bc455'); }
 
 // ---------- build placement ----------
 function finishBuild(b){ burst(b.x,b.z,0xf5b842,10); ticker(b.kind+' complete!','#7bc455'); updateHUD(); }
@@ -619,6 +637,7 @@ function tagRefs(){
   for(const f of G.foods){f.view.hit.userData={kind:'food',ref:f};}
   for(const c of G.clutter)if(!c.removed){c.view.hit.userData={kind:'clutter',ref:c};}
   for(const b of G.builds)if(b.view.pick){b.view.pick.userData={kind:'build',ref:b};}
+  rivalView.children.forEach(o=>{if(o.isMesh)o.userData.kind='rival';});
 }
 function rayAt(px,py){const r=stage.getBoundingClientRect();ndc.set(((px-r.left)/r.width)*2-1,-((py-r.top)/r.height)*2+1);ray.setFromCamera(ndc,camera);}
 function groundPoint(px,py){rayAt(px,py);const hit=ray.intersectObject(ground)[0];return hit?hit.point:null;}
@@ -633,7 +652,7 @@ stage.addEventListener('pointermove',ev=>{
       const ok=cellValid(gx,gz)&&G.sand>=COST[G.buildMode]; ghostTile.material.color.setHex(ok?0x66ff66:0xff5544); }
   }
   if(!pdown)return; const dx=ev.clientX-lx,dy=ev.clientY-ly;lx=ev.clientX;ly=ev.clientY;
-  if(Math.hypot(ev.clientX-sx0,ev.clientY-sy0)>6)pmoved=true;
+  if(Math.hypot(ev.clientX-sx0,ev.clientY-sy0)>14)pmoved=true;
   if(panning||touches>=2){ panCam(-dx,-dy); return; }
   if(pmoved && btn===0 && !G.buildMode){
     selbox.style.display='block';
@@ -689,6 +708,7 @@ function autoDispatch(ud,point){
   else if(ud.kind==='clutter'){const a=nearestFreeAnt(ud.ref.x,ud.ref.z,'worker');if(a){a.order={type:'clear',c:ud.ref};ticker('Ant sent to clear brush.','#7bc455');}else ticker('No free workers.','#9a7a50');}
   else if(ud.kind==='enemy'){const a=nearestFreeAnt(ud.ref.x,ud.ref.z,'soldier');if(a){a.order={type:'attack',e:ud.ref};ticker('Soldier sent to attack!','#f0a890');}else ticker('No free soldiers.','#9a7a50');}
   else if(ud.kind==='build'&&!ud.ref.built){const b=ud.ref;const a=nearestFreeAnt(b.x,b.z,'worker');if(a){a.order={type:'build',b};ticker('Ant sent to build.','#7bc455');}}
+  else if(ud.kind==='rival'){if(G.rival.alive){const a=nearestFreeAnt(G.rival.x,G.rival.z,'soldier');if(a){G.raidActive=true;a.order={type:'raid'};ticker('Soldier sent to raid!','#f0a890');}else ticker('No free soldiers.','#9a7a50');}}
   else{const isRival=point&&d2(point.x,point.z,G.rival.x,G.rival.z)<26&&G.rival.alive;
     if(isRival){const a=nearestFreeAnt(G.rival.x,G.rival.z,'soldier');if(a){G.raidActive=true;a.order={type:'raid'};ticker('Soldier sent to raid!','#f0a890');}else ticker('No free soldiers.','#9a7a50');}
     else if(point){const a=nearestFreeAnt(point.x,point.z,null);if(a){a.order={type:'move',x:point.x,z:point.z};burst(point.x,point.z,0x9be86a,5,10,2);}}}
@@ -706,11 +726,13 @@ function handleTap(px,py){
     for(const e of G.eggs){if(!e.carrier){e.dest=dest;e.claimed=null;}}
     ticker('Eggs now go to the '+dest+(dest==='barracks'?' (soldiers).':' (workers).'),'#7bc455');return;
   }
+  G.sel=G.sel.filter(a=>a.alive);
   if(G.sel.length){
     if(ud.kind==='food'){for(const a of G.sel)if(a.role!=='soldier')a.order={type:'gather',f:ud.ref};ticker('Gathering food.','#7bc455');}
     else if(ud.kind==='clutter'){for(const a of G.sel)if(a.role!=='soldier')a.order={type:'clear',c:ud.ref};ticker('Clearing brush for sand.','#7bc455');}
     else if(ud.kind==='build'){const b=ud.ref;if(!b.built){for(const a of G.sel)if(a.role!=='soldier')a.order={type:'build',b};ticker('Building.','#7bc455');}}
     else if(ud.kind==='enemy'){for(const a of G.sel)if(a.role==='soldier')a.order={type:'attack',e:ud.ref};ticker('Attacking!','#f0a890');}
+    else if(ud.kind==='rival'){if(G.rival.alive){G.raidActive=true;for(const a of G.sel)if(a.role==='soldier')a.order={type:'raid'};ticker('Raid! Soldiers march on the rival.','#f0a890');}}
     else{const isRival=point&&d2(point.x,point.z,G.rival.x,G.rival.z)<26&&G.rival.alive;
       if(isRival){G.raidActive=true;for(const a of G.sel)if(a.role==='soldier')a.order={type:'raid'};ticker('Raid! Soldiers march on the rival.','#f0a890');}
       else if(point){for(const a of G.sel)a.order={type:'move',x:point.x,z:point.z};burst(point.x,point.z,0x9be86a,5,10,2);}}
