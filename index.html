@@ -426,13 +426,13 @@ function startCinematic(){
     const role=(r===0||c===0||c===3)?'soldier':'ant';
     const v=buildAnt(role);
     const sx=P_START-r*4+rnd(-1,1),sz=(c-1.5)*FS+rnd(-1.5,1.5);
-    v.g.rotation.y=-Math.PI/2;v.g.position.set(sx,0,sz);cs.add(v.g);
+    v.g.rotation.y=Math.PI/2;v.g.position.set(sx,0,sz);cs.add(v.g);
     pU.push({v,sx,sz,x:sx,z:sz,vx:0,vz:0});
   }
   for(let r=0;r<5;r++)for(let c=0;c<4;c++){
     const v=buildEnemy();
     const sx=E_START+r*4+rnd(-1,1),sz=(c-1.5)*FS+rnd(-1.5,1.5);
-    v.g.rotation.y=Math.PI/2;v.g.position.set(sx,0,sz);cs.add(v.g);
+    v.g.rotation.y=-Math.PI/2;v.g.position.set(sx,0,sz);cs.add(v.g);
     eU.push({v,sx,sz,x:sx,z:sz,vx:0,vz:0});
   }
   // Drifting dust / spore particles
@@ -499,8 +499,8 @@ function startCinematic(){
     // Phase: march → skirmish → reset → march ...
     if(phase==='march'){
       const t=Math.min(1,phaseT/MARCH);
-      for(const u of pU){u.x=u.sx+(P_TGT-u.sx)*t;u.v.g.position.set(u.x,0,u.sz);u.v.g.rotation.y=-Math.PI/2;animU(u,false);}
-      for(const u of eU){u.x=u.sx+(E_TGT-u.sx)*t;u.v.g.position.set(u.x,0,u.sz);u.v.g.rotation.y=Math.PI/2;animU(u,true);}
+      for(const u of pU){u.x=u.sx+(P_TGT-u.sx)*t;u.v.g.position.set(u.x,0,u.sz);u.v.g.rotation.y=Math.PI/2;animU(u,false);}
+      for(const u of eU){u.x=u.sx+(E_TGT-u.sx)*t;u.v.g.position.set(u.x,0,u.sz);u.v.g.rotation.y=-Math.PI/2;animU(u,true);}
       if(phaseT>=MARCH){
         for(const u of pU){u.z=u.sz+rnd(-5,5);const a=Math.random()*Math.PI*2;u.vx=Math.cos(a)*rnd(8,20);u.vz=Math.sin(a)*rnd(8,20);}
         for(const u of eU){u.z=u.sz+rnd(-5,5);const a=Math.random()*Math.PI*2;u.vx=Math.cos(a)*rnd(8,20);u.vz=Math.sin(a)*rnd(8,20);}
