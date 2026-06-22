@@ -666,7 +666,7 @@ function startGame(){
   rivalView.position.set(rival.x,0,rival.z);
   dangerZone.position.set(rival.x,0.2,rival.z); dangerZone.visible=true;
 
-  G={ food:9999, sand:9999, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], eggs:[], hatch:[], cells:new Set(), patches:[],
+  G={ food:15, sand:0, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], eggs:[], hatch:[], cells:new Set(), patches:[],
     queen:{x:nest.x,z:nest.z,hp:160,maxHp:160,layCd:5},
     rival:{x:rival.x,z:rival.z,hp:120,maxHp:120,level:1,alive:true,respawn:0},
     phase:'dormant', raidTimer:0, raidWarn:false, raidActive:false,
