@@ -671,7 +671,6 @@ function startGame(){
     rival:{x:rival.x,z:rival.z,hp:120,maxHp:120,level:1,alive:true,respawn:0},
     phase:'dormant', raidTimer:0, raidWarn:false, raidActive:false,
     sel:[], buildMode:null, over:false, time:0, shake:0, _h:0, nurseHint:false, eggDest:'nursery' };
-
   for(let i=0;i<5;i++) addAnt('ant');
   addAnt('soldier'); addAnt('soldier');
   // food piles spread across the map, kept away from the rival nest
@@ -684,12 +683,13 @@ function startGame(){
   setBuild(null); ticker('Click food to gather or brush to clear — nearest free ant goes automatically!','#b9e08a'); updateHUD();
 }
 
-function addAnt(role){
+function addAnt(role,ox,oz){
   const v=buildAnt(role); const n=G.nest;
-  v.g.position.set(n.x+rnd(-12,12),0,n.z+rnd(-12,12));
+  const px=(ox!==undefined)?ox+rnd(-8,8):n.x+rnd(-12,12);
+  const pz=(oz!==undefined)?oz+rnd(-8,8):n.z+rnd(-12,12);
+  v.g.position.set(px,0,pz);
   scene.add(v.g);
-  console.log('[ant] addAnt called for role: '+role+' scene children count: '+scene.children.length);
-  G.ants.push({x:v.g.position.x,z:v.g.position.z,role,alive:true,hp:role==='soldier'?80:34,maxHp:role==='soldier'?80:34,
+  G.ants.push({x:px,z:pz,role,alive:true,hp:role==='soldier'?80:34,maxHp:role==='soldier'?80:34,
     speed:role==='soldier'?34:28,heading:0,wob:rnd(0,7),flash:0,atkCd:0,
     carryFood:0,carryEgg:null,order:null,hold:null,view:v});
 }
@@ -701,8 +701,7 @@ function addFood(x,z){ if(G&&d2(x,z,G.rival.x,G.rival.z)<RIVAL_TRIGGER+50)return
 function addClutter(x,z){if(d2(x,z,G.nest.x,G.nest.z)<34)return; if(G&&d2(x,z,G.rival.x,G.rival.z)<RIVAL_TRIGGER+40)return; const v=buildClutter();v.g.position.set(x,0,z);scene.add(v.g);G.clutter.push({x,z,view:v});}
 function layEgg(){const v=buildEggMesh();const n=G.nest;const x=n.x+rnd(-6,6),z=n.z+rnd(-6,6);v.position.set(x,12,z);scene.add(v);
   const lel=document.createElement('div');lel.className='float';lel.style.fontSize='.65rem';lel.style.pointerEvents='none';labels.appendChild(lel);
-  G.eggs.push({x,z,y:12,dest:G.eggDest||'nursery',carrier:null,claimed:null,mesh:v,labelEl:lel});burst(n.x,n.z,0xf5b842,5,18,12);
-  console.log('[egg] Egg laid, total eggs: '+G.eggs.length);}
+  G.eggs.push({x,z,y:12,dest:G.eggDest||'nursery',carrier:null,claimed:null,mesh:v,labelEl:lel});burst(n.x,n.z,0xf5b842,5,18,12);}
 
 // ---------- helpers ----------
 function builtOf(kind){return G.builds.filter(b=>b.kind===kind&&b.built);}
@@ -784,7 +783,6 @@ function deliverEgg(a,dt){
     const kind=egg.dest==='barracks'?'soldier':'ant';
     const hel=document.createElement('div');hel.className='float';hel.style.fontSize='.65rem';hel.style.pointerEvents='none';labels.appendChild(hel);
     G.hatch.push({x:b.x,z:b.z,kind,t:4,labelEl:hel}); burst(b.x,b.z,0xf5b842,6);
-    console.log('[egg] Egg delivered to '+b.kind+' at '+b.x+','+b.z+' — hatching kind: '+kind);
   }
 }
 function autoSoldier(a,dt){
@@ -850,7 +848,7 @@ function tickColony(dt){
   const eggsThisCycle=nurses+1;
   if(q.layCd<=0 && G.food>=6*eggsThisCycle){ G.food-=6*eggsThisCycle; for(let e=0;e<eggsThisCycle;e++) layEgg(); q.layCd=6;
     if(nurses===0 && !G.nurseHint){ G.nurseHint=true; ticker('An egg is on the nest. Build a nursery so ants can hatch it.','#f5d76a'); } }
-  for(let i=G.hatch.length-1;i>=0;i--){ const h=G.hatch[i]; h.t-=dt; console.log('[hatch] Hatching '+h.kind+' at '+h.x+','+h.z+' time remaining: '+h.t.toFixed(2)); if(h.t<=0){ addAnt(h.kind); burst(h.x,h.z,0xf5b842,8); floatText(h.x,8,h.z,'🐜 hatched!','#f5b842'); if(h.labelEl)h.labelEl.remove(); G.hatch.splice(i,1); } }
+  for(let i=G.hatch.length-1;i>=0;i--){ const h=G.hatch[i]; h.t-=dt; if(h.t<=0){ addAnt(h.kind,h.x,h.z); burst(h.x,h.z,0xf5b842,8); floatText(h.x,8,h.z,'🐜 hatched!','#f5b842'); if(h.labelEl)h.labelEl.remove(); G.hatch.splice(i,1); } }
   G.food=Math.min(_foodCap,G.food+builtOf('fungus').length*2*dt);
   // upkeep disabled in test mode
   if(builtOf('barracks').length>0)for(const a of G.ants){if(a.alive&&a.role==='soldier')a.hp=Math.min(a.maxHp,a.hp+5*dt);}
@@ -911,7 +909,7 @@ function placeBuild(kind,wx,wz){
 //  RENDER SYNC
 // ===================================================================
 function sync(dt){
-  for(let i=0;i<G.ants.length;i++){ const a=G.ants[i]; if(!a.alive)continue; console.log('[sync] Syncing ant '+i+' alive: '+a.alive+' position: '+a.x.toFixed(1)+','+a.z.toFixed(1)); const v=a.view;
+  for(let i=0;i<G.ants.length;i++){ const a=G.ants[i]; if(!a.alive)continue; const v=a.view;
     v.g.position.set(a.x,0,a.z);
     a.hv=lerpAng(a.hv||0,a.heading,0.2); v.g.rotation.y=a.hv;
     v.body.position.y=Math.sin(a.wob*2)*0.25;
