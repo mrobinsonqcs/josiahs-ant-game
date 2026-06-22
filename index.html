@@ -685,14 +685,20 @@ function startGame(){
 
 function addAnt(role,ox,oz){
   const v=buildAnt(role); const n=G.nest;
-  const px=(ox!==undefined)?ox+rnd(-8,8):n.x+rnd(-12,12);
-  const pz=(oz!==undefined)?oz+rnd(-8,8):n.z+rnd(-12,12);
+  let px,pz;
+  if(role==='soldier'&&ox!==undefined){
+    const a=Math.random()*Math.PI*2,d=20+Math.random()*5;
+    px=ox+Math.cos(a)*d; pz=oz+Math.sin(a)*d;
+  } else {
+    px=(ox!==undefined)?ox+rnd(-8,8):n.x+rnd(-12,12);
+    pz=(oz!==undefined)?oz+rnd(-8,8):n.z+rnd(-12,12);
+  }
   v.g.position.set(px,0,pz);
   scene.add(v.g);
   const hold=(role==='soldier'&&ox!==undefined)?{x:ox,z:oz}:null;
   G.ants.push({x:px,z:pz,role,alive:true,hp:role==='soldier'?80:34,maxHp:role==='soldier'?80:34,
     speed:role==='soldier'?34:28,heading:0,wob:rnd(0,7),flash:0,atkCd:0,
-    carryFood:0,carryEgg:null,order:null,hold,view:v});
+    carryFood:0,carryEgg:null,order:null,hold,sentryTarget:null,sentryPause:0,view:v});
 }
 function addEnemy(){const v=buildEnemy();const r=G.rival;v.g.position.set(r.x+rnd(-8,8),0,r.z+rnd(-8,8));
   scene.add(v.g);
@@ -726,7 +732,7 @@ function tickAnts(dt){
 }
 function runOrder(a,o,dt){
   if(!o._entered){o._entered=true;if(a.fetchEgg){a.fetchEgg.claimed=null;a.fetchEgg=null;}}
-  if(o.type==='move'){ if(moveTo(a,o.x,o.z,a.speed,dt,2.5)){ a.hold={x:o.x,z:o.z}; a.order=null; } return; }
+  if(o.type==='move'){ if(moveTo(a,o.x,o.z,a.speed,dt,2.5)){ a.hold={x:o.x,z:o.z}; a.sentryTarget=null; a.order=null; } return; }
   if(o.type==='gather'){ const f=o.f; if(!f||f.amount<=0){a.order=null;return;} doGather(a,f,dt); return; }
   if(o.type==='clear'){ const c=o.c; if(!c||c.removed){a.order=null;return;} doClear(a,c,dt); return; }
   if(o.type==='build'){ const b=o.b; if(!b||b.built){a.order=null;return;} doBuild(a,b,dt); return; }
@@ -792,12 +798,18 @@ function autoSoldier(a,dt){
   // engage nearby enemy
   let e=null,_ebd=1e9;for(const _e of G.enemies){if(!_e.alive)continue;const _ed=d2(a.x,a.z,_e.x,_e.z);if(_ed<_ebd){_ebd=_ed;e=_e;}}
   const near=e&&(d2(a.x,a.z,e.x,e.z)<110 || d2(e.x,e.z,G.nest.x,G.nest.z)<150);
-  if(near){ doAttack(a,e,dt); return; }
-  if(G.raidActive&&G.rival.alive){ doRaid(a,dt); return; }
-  // patrol around hold point or nest
+  if(near){ a.sentryTarget=null; doAttack(a,e,dt); return; }
+  if(G.raidActive&&G.rival.alive){ a.sentryTarget=null; doRaid(a,dt); return; }
+  // sentry: walk to random nearby point, pause, repeat
   const hx=a.hold?a.hold.x:G.nest.x, hz=a.hold?a.hold.z:G.nest.z;
-  const px=hx+Math.cos(G.time*.8+a.wob)*16, pz=hz+Math.sin(G.time*.8+a.wob)*16;
-  moveTo(a,px,pz,a.speed*.5,dt,2);
+  if(a.sentryPause>0){ a.sentryPause-=dt; return; }
+  if(!a.sentryTarget){
+    const ang=Math.random()*Math.PI*2, dist=Math.random()*30;
+    a.sentryTarget={x:hx+Math.cos(ang)*dist, z:hz+Math.sin(ang)*dist};
+  }
+  if(moveTo(a,a.sentryTarget.x,a.sentryTarget.z,a.speed*.45,dt,3)){
+    a.sentryTarget=null; a.sentryPause=1+Math.random();
+  }
 }
 function doAttack(a,e,dt){
   if(!e.alive){a.order=null;return;}
