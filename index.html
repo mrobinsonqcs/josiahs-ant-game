@@ -643,7 +643,7 @@ function startGame(){
   // clear
   if(G){ for(const a of G.ants){disposeGroup(a.view.g);scene.remove(a.view.g);}
     for(const e of G.enemies){disposeGroup(e.view.g);scene.remove(e.view.g);}
-    for(const b of G.builds){disposeGroup(b.view.g);scene.remove(b.view.g);}
+    for(const b of G.builds){if(b.labelEl)b.labelEl.remove();disposeGroup(b.view.g);scene.remove(b.view.g);}
     for(const f of G.foods){disposeGroup(f.view.g);scene.remove(f.view.g);}
     for(const c of G.clutter){disposeGroup(c.view.g);scene.remove(c.view.g);}
     for(const e of G.eggs){scene.remove(e.mesh);if(e.labelEl)e.labelEl.remove();}
@@ -707,6 +707,8 @@ function layEgg(){const v=buildEggMesh();const n=G.nest;const x=n.x+rnd(-6,6),z=
 // ---------- helpers ----------
 function builtOf(kind){return G.builds.filter(b=>b.kind===kind&&b.built);}
 function nearestBuilt(kind,x,z){let best=null,bd=1e9;for(const b of builtOf(kind)){const d=d2(x,z,b.x,b.z);if(d<bd){bd=d;best=b;}}return best;}
+function antCap(){return 6+builtOf('nursery').length*8;}
+function soldierCap(){return 2+builtOf('barracks').length*6;}
 function moveTo(e,tx,tz,sp,dt,th=2){const dx=tx-e.x,dz=tz-e.z,d=Math.hypot(dx,dz);if(d<th){return true;}e.x+=dx/d*sp*dt;e.z+=dz/d*sp*dt;if(Math.abs(dx)>.1||Math.abs(dz)>.1)e.heading=Math.atan2(dx,dz);return false;}
 function collideWalls(e,radius){for(const b of G.builds){if(b.kind!=='wall'||!b.built)continue;const dx=e.x-b.x,dz=e.z-b.z,d=Math.hypot(dx,dz),min=radius+GRID*0.55;if(d<min&&d>0.01){e.x=b.x+dx/d*min;e.z=b.z+dz/d*min;return b;}}return null;}
 
@@ -845,12 +847,27 @@ function tickTowers(dt){
 // ---------- colony / queen / hatch ----------
 function tickColony(dt){
   const q=G.queen; q.layCd-=dt;
-  const nurses=builtOf('nursery').length, barracks=builtOf('barracks').length;
-  const eggCap=2+2*(nurses+barracks);
-  const eggsThisCycle=nurses+1;
-  const layCount=Math.min(eggsThisCycle,Math.max(0,eggCap-(G.eggs.length+G.hatch.length)));
-  if(q.layCd<=0 && layCount>0 && G.food>=6*layCount){ G.food-=6*layCount; for(let e=0;e<layCount;e++) layEgg(); q.layCd=6;
-    if(nurses===0 && !G.nurseHint){ G.nurseHint=true; ticker('An egg is on the nest. Build a nursery so ants can hatch it.','#f5d76a'); } }
+  const nurses=builtOf('nursery').length;
+  const aC=antCap(), sC=soldierCap();
+  const liveAnts=G.ants.filter(a=>a.alive&&a.role==='ant').length;
+  const liveSol=G.ants.filter(a=>a.alive&&a.role==='soldier').length;
+  const pendAnts=G.eggs.filter(e=>e.dest==='nursery').length+G.hatch.filter(h=>h.kind==='ant').length;
+  const pendSol=G.eggs.filter(e=>e.dest==='barracks').length+G.hatch.filter(h=>h.kind==='soldier').length;
+  const antsFull=(liveAnts+pendAnts)>=aC, solFull=(liveSol+pendSol)>=sC;
+  const dest=G.eggDest||'nursery';
+  const destFull=dest==='nursery'?antsFull:solFull;
+  const remaining=dest==='nursery'?aC-(liveAnts+pendAnts):sC-(liveSol+pendSol);
+  const layCount=destFull?0:Math.min(nurses+1,remaining);
+  if(q.layCd<=0){
+    if(layCount>0&&G.food>=6*layCount){ G.food-=6*layCount; for(let e=0;e<layCount;e++) layEgg(); q.layCd=6;
+      G._capMsg=null;
+      if(nurses===0&&!G.nurseHint){G.nurseHint=true;ticker('An egg is on the nest. Build a nursery so ants can hatch it.','#f5d76a');}
+    } else if(destFull&&G._capMsg!==dest){
+      G._capMsg=dest;
+      ticker((dest==='nursery'?'Ant':'Soldier')+' cap reached — build more '+(dest==='nursery'?'nurseries':'barracks')+'!','#f5b842');
+    }
+  }
+  if(!destFull)G._capMsg=null;
   for(let i=G.hatch.length-1;i>=0;i--){ const h=G.hatch[i]; h.t-=dt; if(h.t<=0){ addAnt(h.kind,h.x,h.z); burst(h.x,h.z,0xf5b842,8); floatText(h.x,8,h.z,'🐜 hatched!','#f5b842'); if(h.labelEl)h.labelEl.remove(); G.hatch.splice(i,1); } }
   G.food=Math.min(_foodCap,G.food+builtOf('fungus').length*2*dt);
   // upkeep disabled in test mode
@@ -884,7 +901,9 @@ function crushRival(){ const r=G.rival;r.alive=false;r.respawn=18;G.raidActive=f
   ticker('Rival nest destroyed! They will rebuild stronger. Keep growing!','#7bc455'); }
 
 // ---------- build placement ----------
-function finishBuild(b){ burst(b.x,b.z,0xf5b842,10); ticker(b.kind+' complete!','#7bc455'); updateHUD(); }
+function finishBuild(b){ burst(b.x,b.z,0xf5b842,10); ticker(b.kind+' complete!','#7bc455');
+  if(b.kind==='nursery'||b.kind==='barracks'){const lel=document.createElement('div');lel.className='float';lel.style.fontSize='.65rem';lel.style.pointerEvents='none';labels.appendChild(lel);b.labelEl=lel;}
+  updateHUD(); }
 function cellValid(gx,gz){
   if(G.cells.has(cellKey(gx,gz))) return false;
   if(d2(gx,gz,G.nest.x,G.nest.z)<GRID*1.4) return false;
@@ -933,6 +952,20 @@ function sync(dt){
     if(eg.labelEl){const p=project(eg.x,17,eg.z);if(p.front){eg.labelEl.style.display='block';eg.labelEl.style.left=p.x+'px';eg.labelEl.style.top=p.y+'px';if(eg.claimed){eg.labelEl.textContent='🐜 coming';eg.labelEl.style.color='#9be86a';}else{eg.labelEl.textContent=Math.ceil(Math.max(0,G.queen.layCd))+'s';eg.labelEl.style.color='#f5d76a';}}else eg.labelEl.style.display='none';} }
   // hatching countdowns above buildings
   for(const h of G.hatch){if(h.labelEl){const p=project(h.x,22,h.z);if(p.front){h.labelEl.style.display='block';h.labelEl.style.left=p.x+'px';h.labelEl.style.top=p.y+'px';h.labelEl.textContent=(h.kind==='soldier'?'⚔️':'🐜')+' '+Math.ceil(Math.max(0,h.t))+'s';h.labelEl.style.color='#f5b842';}else h.labelEl.style.display='none';}}
+  // capacity labels above nursery / barracks
+  const _lA=G.ants.filter(a=>a.alive&&a.role==='ant').length, _lS=G.ants.filter(a=>a.alive&&a.role==='soldier').length;
+  const _pA=G.eggs.filter(e=>e.dest==='nursery').length+G.hatch.filter(h=>h.kind==='ant').length;
+  const _pS=G.eggs.filter(e=>e.dest==='barracks').length+G.hatch.filter(h=>h.kind==='soldier').length;
+  for(const b of G.builds){
+    if(!b.built||!b.labelEl)continue;
+    const p=project(b.x,30,b.z);
+    if(!p.front){b.labelEl.style.display='none';continue;}
+    b.labelEl.style.display='block';b.labelEl.style.left=p.x+'px';b.labelEl.style.top=p.y+'px';
+    const isN=b.kind==='nursery';
+    const tot=isN?_lA+_pA:_lS+_pS, cap=isN?antCap():soldierCap(), full=tot>=cap;
+    b.labelEl.textContent=(isN?'🐜':'⚔️')+' '+tot+'/'+cap+(full?' FULL':'');
+    b.labelEl.style.color=full?'#ff5555':'#f5b842';
+  }
   // gentle terrain sway (grass + tree canopies)
   for(const c of G.clutter){ if(c.removed)continue; c.view.g.rotation.z=Math.sin(G.time*1.3+c.x*0.1)*0.04; }
   // danger zone gentle pulse while dormant
@@ -1049,6 +1082,7 @@ function handleTap(px,py){
       const b=ud.ref;
       const refund=b.built?Math.floor(COST[b.kind]/2):COST[b.kind];
       for(const a of G.ants)if(a.order&&a.order.type==='build'&&a.order.b===b)a.order=null;
+      if(b.labelEl)b.labelEl.remove();
       scene.remove(b.view.g);disposeGroup(b.view.g);
       G.cells.delete(cellKey(b.gx,b.gz));
       const i=G.builds.indexOf(b);if(i>=0)G.builds.splice(i,1);
@@ -1118,8 +1152,8 @@ function updateHUD(){ if(!G)return;
   document.getElementById('r-food').textContent=Math.floor(G.food)+'/'+_foodCap;
   document.getElementById('r-sand').textContent=Math.floor(G.sand);
   document.getElementById('r-eggs').textContent=G.eggs.length+G.hatch.length;
-  document.getElementById('r-ants').textContent=ants;
-  document.getElementById('r-sol').textContent=sol;
+  document.getElementById('r-ants').textContent=ants+'/'+antCap();
+  document.getElementById('r-sol').textContent=sol+'/'+soldierCap();
   document.querySelectorAll('#builds .b[data-build]').forEach(b=>{if(COST[b.dataset.build]!==undefined)b.disabled=G.sand<COST[b.dataset.build];});
   document.getElementById('rf').style.width=(G.rival.alive?G.rival.hp/G.rival.maxHp*100:0)+'%';
   document.getElementById('rlv').textContent='Lv '+G.rival.level;
