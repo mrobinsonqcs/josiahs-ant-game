@@ -1161,7 +1161,7 @@ document.getElementById('splash-btn').onclick=()=>{
 function ticker(m,c){const el=document.getElementById('ticker');const b=document.createElement('b');b.textContent=m;el.textContent='';el.appendChild(b);el.style.color=c||'#9a7a50';}
 function updateHUD(){ if(!G)return;
   const ants=G.ants.filter(a=>a.alive&&a.role==='ant').length, sol=G.ants.filter(a=>a.alive&&a.role==='soldier').length;
-  document.getElementById('r-food').textContent=Math.floor(G.food)+'/'+_foodCap;
+  document.getElementById('r-food').textContent=Math.floor(G.food);
   document.getElementById('r-sand').textContent=Math.floor(G.sand);
   document.getElementById('r-eggs').textContent=G.eggs.length+G.hatch.length;
   document.getElementById('r-ants').textContent=ants+'/'+antCap();
