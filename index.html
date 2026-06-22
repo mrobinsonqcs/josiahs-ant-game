@@ -689,9 +689,10 @@ function addAnt(role,ox,oz){
   const pz=(oz!==undefined)?oz+rnd(-8,8):n.z+rnd(-12,12);
   v.g.position.set(px,0,pz);
   scene.add(v.g);
+  const hold=(role==='soldier'&&ox!==undefined)?{x:ox,z:oz}:null;
   G.ants.push({x:px,z:pz,role,alive:true,hp:role==='soldier'?80:34,maxHp:role==='soldier'?80:34,
     speed:role==='soldier'?34:28,heading:0,wob:rnd(0,7),flash:0,atkCd:0,
-    carryFood:0,carryEgg:null,order:null,hold:null,view:v});
+    carryFood:0,carryEgg:null,order:null,hold,view:v});
 }
 function addEnemy(){const v=buildEnemy();const r=G.rival;v.g.position.set(r.x+rnd(-8,8),0,r.z+rnd(-8,8));
   scene.add(v.g);
@@ -844,9 +845,11 @@ function tickTowers(dt){
 // ---------- colony / queen / hatch ----------
 function tickColony(dt){
   const q=G.queen; q.layCd-=dt;
-  const nurses=builtOf('nursery').length;
+  const nurses=builtOf('nursery').length, barracks=builtOf('barracks').length;
+  const eggCap=2+2*(nurses+barracks);
   const eggsThisCycle=nurses+1;
-  if(q.layCd<=0 && G.food>=6*eggsThisCycle){ G.food-=6*eggsThisCycle; for(let e=0;e<eggsThisCycle;e++) layEgg(); q.layCd=6;
+  const layCount=Math.min(eggsThisCycle,Math.max(0,eggCap-(G.eggs.length+G.hatch.length)));
+  if(q.layCd<=0 && layCount>0 && G.food>=6*layCount){ G.food-=6*layCount; for(let e=0;e<layCount;e++) layEgg(); q.layCd=6;
     if(nurses===0 && !G.nurseHint){ G.nurseHint=true; ticker('An egg is on the nest. Build a nursery so ants can hatch it.','#f5d76a'); } }
   for(let i=G.hatch.length-1;i>=0;i--){ const h=G.hatch[i]; h.t-=dt; if(h.t<=0){ addAnt(h.kind,h.x,h.z); burst(h.x,h.z,0xf5b842,8); floatText(h.x,8,h.z,'🐜 hatched!','#f5b842'); if(h.labelEl)h.labelEl.remove(); G.hatch.splice(i,1); } }
   G.food=Math.min(_foodCap,G.food+builtOf('fungus').length*2*dt);
