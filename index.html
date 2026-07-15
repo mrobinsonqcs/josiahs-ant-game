@@ -85,7 +85,7 @@ body.splash-active #hud{visibility:hidden}
     <button class="b" data-build="store">🏚️ Store<span class="c">10 sand</span></button>
     <button class="b" data-build="fungus">🍄 Fungus<span class="c">14 sand</span></button>
     <button class="b" data-build="wall">🧱 Wall<span class="c">4 sand</span></button>
-    <button class="b" data-build="tower">🗼 Tower<span class="c">18 sand</span></button>
+    <button class="b" data-build="perch">🪲 Perch<span class="c">16 sand</span></button>
     <button class="b" id="demolish-btn">🔨 Demolish</button>
     <button class="b" id="cancelbuild" style="display:none;border-color:#e06050;color:#f0a090">✕ Cancel</button>
   </div>
@@ -120,8 +120,8 @@ function lerpAng(a,b,t){let d=((b-a+Math.PI)%(Math.PI*2))-Math.PI;if(d<-Math.PI)
 
 const MAP=1100, HALF=MAP/2, BOUND=HALF-40;
 const GRID=20, RIVAL_TRIGGER=140;
-const COST={nursery:12,barracks:16,store:10,fungus:14,wall:4,tower:18};
-const BTIME={nursery:4,barracks:4,store:4,fungus:4,wall:1.5,tower:5};
+const COST={nursery:12,barracks:16,store:10,fungus:14,wall:4,perch:16};
+const BTIME={nursery:4,barracks:4,store:4,fungus:4,wall:1.5,perch:3};
 
 // ---------- renderer ----------
 const stage=document.getElementById('stage');
@@ -259,13 +259,46 @@ function buildStruct(kind){
     const w=new THREE.Mesh(G_box,new THREE.MeshStandardMaterial({color:0x7a6450,roughness:1}));w.scale.set(GRID,11,GRID);w.position.y=5.5;w.castShadow=true;w.receiveShadow=true;g.add(w);
     const cap=new THREE.Mesh(G_box,new THREE.MeshStandardMaterial({color:0x5a4836}));cap.scale.set(GRID+1,2,GRID+1);cap.position.y=11;g.add(cap);
     pick=w;
-  } else if(kind==='tower'){
-    const base=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x6a5640,roughness:.9}));base.scale.set(6,16,6);base.position.y=8;base.castShadow=true;g.add(base);
-    const top=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x4a3a28}));top.scale.set(8,4,8);top.position.y=16;top.castShadow=true;g.add(top);
-    const horn=new THREE.Mesh(G_cone,new THREE.MeshStandardMaterial({color:0x3a2a1a}));horn.scale.set(2,5,2);horn.position.y=20;g.add(horn);
-    pick=base;
+  } else if(kind==='perch'){
+    // small organic landing pad — a raised mossy disc / lily pad
+    const stalk=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x6a5a3a,roughness:.95}));stalk.scale.set(2.2,2,2.2);stalk.position.y=1;stalk.castShadow=true;g.add(stalk);
+    const disc=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x4a7a3a,roughness:.85}));disc.scale.set(6,1.6,6);disc.position.y=2.4;disc.castShadow=true;disc.receiveShadow=true;g.add(disc);
+    for(let i=0;i<9;i++){const ang=(i/9)*Math.PI*2,r=rnd(1.5,5);const m=new THREE.Mesh(G_,new THREE.MeshStandardMaterial({color:i%2?0x5a8a44:0x3f6a30,roughness:.9}));m.scale.set(rnd(1.1,2.1),rnd(.5,1.0),rnd(1.1,2.1));m.position.set(Math.cos(ang)*r,3.1,Math.sin(ang)*r);m.castShadow=true;g.add(m);}
+    pick=disc;
   }
   return {g,pick};
+}
+// ---------- dragonfly ----------
+function buildDragonfly(){
+  const g=new THREE.Group();
+  const body=new THREE.Group(); g.add(body);           // tilt / pitch pivot
+  const bodyMat=new THREE.MeshStandardMaterial({color:0x1f9e86,roughness:.35,metalness:.45,emissive:0x0c3b30,emissiveIntensity:.35});
+  const headMat=new THREE.MeshStandardMaterial({color:0x2bb89a,roughness:.35,metalness:.4,emissive:0x0c3b30,emissiveIntensity:.3});
+  const eyeMat=new THREE.MeshStandardMaterial({color:0x101f6a,roughness:.25,metalness:.3});
+  const wingMat=new THREE.MeshStandardMaterial({color:0xbfe2ff,transparent:true,opacity:.7,side:THREE.DoubleSide,roughness:.15,metalness:.1});
+  // long thin iridescent body along +/- z (front is +z)
+  const ab=new THREE.Mesh(G_cyl,bodyMat); ab.rotation.x=Math.PI/2; ab.scale.set(0.75,9,0.75); ab.position.set(0,0,-1); ab.castShadow=true; body.add(ab);
+  // tail tapering to a thin point at the rear
+  const tail=new THREE.Mesh(G_cone,bodyMat); tail.rotation.x=Math.PI/2; tail.scale.set(1.9,3.6,1.9); tail.position.set(0,0,-6.4); tail.castShadow=true; body.add(tail);
+  // thorax bulge near the wings
+  const thorax=new THREE.Mesh(G_,bodyMat); thorax.scale.set(1.5,1.5,2.2); thorax.position.set(0,0,3.2); thorax.castShadow=true; body.add(thorax);
+  // head + two large compound eyes
+  const head=new THREE.Mesh(G_,headMat); head.scale.set(1.7,1.6,1.7); head.position.set(0,0,6.2); head.castShadow=true; body.add(head);
+  body.add(sph(eyeMat,1.0,1.0,1.0,-1.1,0.2,6.6,true));
+  body.add(sph(eyeMat,1.0,1.0,1.0, 1.1,0.2,6.6,true));
+  // four wings on pivots (two per side), angled slightly upward
+  const wings=[];
+  const defs=[[1,2.6],[-1,2.6],[1,-0.6],[-1,-0.6]];
+  for(const [side,zp] of defs){
+    const pivot=new THREE.Group(); pivot.position.set(side*0.7,0.5,zp);
+    const w=new THREE.Mesh(G_,wingMat); w.scale.set(5.5,0.18,2.2); w.position.set(side*5.4,0,0);
+    pivot.add(w); pivot.userData={side}; body.add(pivot); wings.push(pivot);
+  }
+  g.scale.setScalar(1.1);
+  // faint ground shadow (lives on the ground plane, not parented to g)
+  const shadow=new THREE.Mesh(new THREE.CircleGeometry(6,20),new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.22,depthWrite:false}));
+  shadow.rotation.x=-Math.PI/2; shadow.position.y=0.3; scene.add(shadow);
+  return {g,body,wings,shadow};
 }
 function buildNestMound(){
   const g=new THREE.Group();
@@ -648,6 +681,7 @@ function startGame(){
     for(const c of G.clutter){disposeGroup(c.view.g);scene.remove(c.view.g);}
     for(const e of G.eggs){scene.remove(e.mesh);if(e.labelEl)e.labelEl.remove();}
     for(const h of G.hatch)if(h.labelEl)h.labelEl.remove();
+    if(G.dragonflies)for(const df of G.dragonflies){disposeGroup(df.view.g);scene.remove(df.view.g);scene.remove(df.view.shadow);df.view.shadow.geometry.dispose();df.view.shadow.material.dispose();}
     for(const p of G.patches){p.geometry.dispose();p.material.dispose();scene.remove(p);}
   }
   for(const f of floats)f.el.remove(); floats.length=0;
@@ -666,7 +700,7 @@ function startGame(){
   rivalView.position.set(rival.x,0,rival.z);
   dangerZone.position.set(rival.x,0.2,rival.z); dangerZone.visible=true;
 
-  G={ food:15, sand:0, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], eggs:[], hatch:[], cells:new Set(), patches:[],
+  G={ food:15, sand:0, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], eggs:[], hatch:[], dragonflies:[], cells:new Set(), patches:[],
     queen:{x:nest.x,z:nest.z,hp:160,maxHp:160,layCd:5},
     rival:{x:rival.x,z:rival.z,hp:120,maxHp:120,level:1,alive:true,respawn:0},
     phase:'dormant', raidTimer:0, raidWarn:false, raidActive:false,
@@ -854,15 +888,63 @@ function tickEnemies(dt){
   G.enemies=G.enemies.filter(e=>{if(!e.alive){scene.remove(e.view.g);return false;}return true;});
 }
 
-// ---------- towers ----------
-function tickTowers(dt){
-  for(const b of builtOf('tower')){
-    b.cd=(b.cd||0)-dt;
-    if(b.cd<=0){
-      const e=G.enemies.filter(e=>e.alive&&d2(b.x,b.z,e.x,e.z)<130).sort((p,q)=>d2(b.x,b.z,p.x,p.z)-d2(b.x,b.z,q.x,q.z))[0];
-      if(e){ e.hp-=rndI(10,18); e.flash=1; b.cd=.8; burst(e.x,e.z,0xffd24a,5); for(let i=0;i<4;i++)burst(lerp(b.x,e.x,i/4),lerp(b.z,e.z,i/4),0xffd24a,1,6,18); if(e.hp<=0){e.alive=false;burst(e.x,e.z,0xcc3322,10);} }
-      else b.cd=.3;
+// ---------- dragonflies ----------
+const DF_RANGE=90, DF_HMIN=18, DF_HMAX=22;
+function spawnDragonfly(perch){
+  const v=buildDragonfly();
+  const hy=DF_HMAX;
+  v.g.position.set(perch.x,hy,perch.z); scene.add(v.g);
+  const df={x:perch.x,y:hy,z:perch.z,vx:0,vy:0,vz:0,state:'hover',target:null,atkCd:0,perch,view:v,
+    t:rnd(0,7),heading:0,pitch:0};
+  perch.dragonfly=df; G.dragonflies.push(df);
+  ticker('Dragonfly on patrol!','#8fe0d0');
+}
+function removeDragonfly(df){
+  burst(df.x,df.z,0x8fe0d0,16,32,df.y);
+  scene.remove(df.view.g); disposeGroup(df.view.g);
+  scene.remove(df.view.shadow); df.view.shadow.geometry.dispose(); df.view.shadow.material.dispose();
+  const i=G.dragonflies.indexOf(df); if(i>=0)G.dragonflies.splice(i,1);
+  if(df.perch)df.perch.dragonfly=null;
+}
+function tickDragonflies(dt){
+  for(const df of G.dragonflies){
+    df.t+=dt; df.atkCd=Math.max(0,df.atkCd-dt);
+    const perch=df.perch;
+    // nearest live enemy within range of the perch
+    let e=null,bd=1e9;
+    for(const en of G.enemies){ if(!en.alive)continue; const d=d2(perch.x,perch.z,en.x,en.z); if(d<DF_RANGE&&d<bd){bd=d;e=en;} }
+    let tx,ty,tz,sp;
+    if(e){
+      df.state='dive'; df.target=e;
+      if(df.atkCd<=0){
+        // plunge at the enemy
+        tx=e.x; ty=6; tz=e.z; sp=185;
+        if(d2(df.x,df.z,e.x,e.z)<9 && df.y<13){
+          e.hp-=rndI(15,22); e.flash=1; df.atkCd=1.2;
+          burst(e.x,e.z,0x8fe0d0,9); G.shake=Math.min(2,(G.shake||0)+.3);
+          if(e.hp<=0){ e.alive=false; burst(e.x,e.z,0xcc3322,12); floatText(e.x,6,e.z,'down!','#8fe0d0'); }
+        }
+      } else {
+        // swoop back up above the enemy, ready for the next dive
+        tx=e.x; ty=DF_HMAX; tz=e.z; sp=95;
+      }
+    } else {
+      df.state='hover'; df.target=null;
+      // slow lazy figure-eight above the perch (1:2 Lissajous)
+      const R=18;
+      tx=perch.x+Math.sin(df.t*0.9)*R;
+      tz=perch.z+Math.sin(df.t*1.8)*R*0.55;
+      ty=DF_HMIN+(DF_HMAX-DF_HMIN)*(0.5+0.5*Math.sin(df.t*0.7));
+      sp=55;
     }
+    const dx=tx-df.x, dy=ty-df.y, dz=tz-df.z, dist=Math.hypot(dx,dy,dz);
+    if(dist>0.01){
+      const step=Math.min(dist,sp*dt);
+      df.x+=dx/dist*step; df.y+=dy/dist*step; df.z+=dz/dist*step;
+      if(Math.abs(dx)>.05||Math.abs(dz)>.05) df.heading=Math.atan2(dx,dz);
+      df.pitch=clamp(-(dy/dist),-0.9,0.9);   // moving down → nose down
+    } else df.pitch=0;
+    df.y=Math.max(df.y,6);                    // never touch the ground
   }
 }
 
@@ -925,6 +1007,7 @@ function crushRival(){ const r=G.rival;r.alive=false;r.respawn=18;G.raidActive=f
 // ---------- build placement ----------
 function finishBuild(b){ burst(b.x,b.z,0xf5b842,10); ticker(b.kind+' complete!','#7bc455');
   if(b.kind==='nursery'||b.kind==='barracks'){const lel=document.createElement('div');lel.className='float';lel.style.fontSize='.65rem';lel.style.pointerEvents='none';labels.appendChild(lel);b.labelEl=lel;}
+  if(b.kind==='perch') spawnDragonfly(b);
   updateHUD(); }
 function cellValid(gx,gz){
   if(G.cells.has(cellKey(gx,gz))) return false;
@@ -968,6 +1051,17 @@ function sync(dt){
     v.g.position.set(e.x,0,e.z); e.hv=lerpAng(e.hv||0,e.heading,0.18); v.g.rotation.y=e.hv;
     v.body.position.y=Math.sin(e.wob*2)*0.2;
     for(let i=0;i<v.legs.length;i++){const p=v.legs[i];p.rotation.x=Math.sin(e.wob*2.2+p.userData.ph)*0.4;}
+  }
+  // dragonflies: hover, beat wings, pitch/bank, cast a moving shadow
+  for(const df of G.dragonflies){ const v=df.view;
+    v.g.position.set(df.x,df.y,df.z);
+    df.hv=lerpAng(df.hv||0,df.heading||0,0.18); v.g.rotation.y=df.hv;
+    v.body.rotation.x=lerp(v.body.rotation.x||0,df.pitch||0,0.2);      // nose-down during a dive
+    v.body.rotation.z=Math.sin(G.time*1.8+df.t)*0.06;                 // gentle bank
+    const beat=Math.sin(G.time*18)*0.3;
+    for(const p of v.wings){ p.rotation.z=p.userData.side*(0.22+beat); }
+    v.shadow.position.set(df.x,0.3,df.z);
+    const k=clamp(1-(df.y-6)/40,0.45,1); v.shadow.scale.setScalar(k); v.shadow.material.opacity=0.24*k;
   }
   // loose eggs sit on the nest, pulsing
   for(const eg of G.eggs){ if(eg.carrier)continue; const s=1+Math.sin(G.time*4+eg.x)*0.08; eg.mesh.scale.set(1.3*s,1.8*s,1.3*s); eg.mesh.position.set(eg.x,12+Math.sin(G.time*2+eg.z)*0.4,eg.z);
@@ -1104,6 +1198,7 @@ function handleTap(px,py){
       const b=ud.ref;
       const refund=b.built?Math.floor(COST[b.kind]/2):COST[b.kind];
       for(const a of G.ants)if(a.order&&a.order.type==='build'&&a.order.b===b)a.order=null;
+      if(b.dragonfly)removeDragonfly(b.dragonfly);
       if(b.labelEl)b.labelEl.remove();
       scene.remove(b.view.g);disposeGroup(b.view.g);
       G.cells.delete(cellKey(b.gx,b.gz));
@@ -1220,7 +1315,7 @@ function loop(){
     try{tickColony(dt);}catch(e){console.error('colony',e);}
     try{tickAnts(dt);}catch(e){console.error('ants',e);}
     try{tickEnemies(dt);}catch(e){console.error('enemies',e);}
-    try{tickTowers(dt);}catch(e){console.error('towers',e);}
+    try{tickDragonflies(dt);}catch(e){console.error('dragonflies',e);}
     try{sync(dt);}catch(e){console.error('sync',e);}
     try{tickParticles(dt);tickFloats(dt);}catch(e){console.error('fx',e);}
     G._h=(G._h||0)+dt; if(G._h>0.2){updateHUD();updateBanner();G._h=0;}
