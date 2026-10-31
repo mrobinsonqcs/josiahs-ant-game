@@ -56,6 +56,12 @@ body{background:#0e0a06;font-family:'Nunito',sans-serif;color:#f0d9a8;overflow:h
 #helpclose{display:block;margin:16px auto 2px;background:#3d2510;border:2px solid #e8930a;color:#f5b842;border-radius:10px;padding:9px 32px;font-family:'Fredoka One';font-size:1rem;cursor:pointer}
 #splash-help{margin-top:12px;background:rgba(40,25,10,.55);border:1.5px solid #8a6a3a;color:#ffd680;font-family:Nunito;font-weight:800;font-size:.85rem;padding:8px 22px;border-radius:10px;cursor:pointer;animation:fadeInUp .5s ease .8s both}
 #splash-help:hover{background:rgba(70,45,18,.7)}
+#splash-stats{display:none;margin:0 auto 14px;max-width:300px;text-align:left;background:rgba(0,0,0,.35);border:1px solid rgba(255,170,60,.3);border-radius:12px;padding:10px 14px}
+#splash-stats .srow{display:flex;justify-content:space-between;font-size:.82rem;font-weight:700;color:#ffd680;padding:2px 0}
+#splash-stats .srow .sv{color:#fff}
+#hurtflash{position:absolute;inset:0;z-index:5;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(200,20,20,.6) 100%);transition:opacity .35s ease-out}
+#pausebadge{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:7;font-family:'Fredoka One';font-size:2.4rem;color:#ffd680;text-shadow:0 2px 10px rgba(0,0,0,.9);background:rgba(18,10,4,.5);padding:8px 28px;border-radius:16px;border:2px solid rgba(255,170,60,.4);pointer-events:none}
+body.paused #pausebadge{display:block}
 #zoom button{width:36px;height:36px;border-radius:9px;border:1.5px solid #5c3a1e;background:rgba(30,18,8,.85);color:#f0d9a8;font-size:1.2rem;font-weight:800;cursor:pointer}
 #hud{background:#100702;border-top:2px solid #3d2510;padding:7px 9px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
 .row{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
@@ -110,6 +116,8 @@ body.splash-active #hud{visibility:hidden}
   </div>
   <div id="zoom"><button id="zin">+</button><button id="zout">−</button></div>
   <div id="mmwrap"><canvas id="mmap" width="150" height="150"></canvas><div id="mmlabel">Region 1</div></div>
+  <div id="hurtflash"></div>
+  <div id="pausebadge">⏸ PAUSED</div>
   <div id="err">Could not load the 3D engine. Check your connection and reload.</div>
   <div id="ov"><div id="ovb"><h2 id="ovt">—</h2><p id="ovm"></p><button id="replay">Play Again</button></div></div>
 </div>
@@ -134,6 +142,8 @@ body.splash-active #hud{visibility:hidden}
     <button class="b" id="sel-ants">Select all ants</button>
     <button class="b" id="sel-sol">Select all soldiers</button>
     <button class="b" id="upg-btn">🔬 Upgrades</button>
+    <button class="b" id="speed-btn">⏩ 1×</button>
+    <button class="b" id="pause-btn">⏸ Pause</button>
     <button class="b" id="help-btn">❓ Help</button>
     <button class="b" id="mute-btn">🔊</button>
     <button class="b" id="save-btn">💾 Save</button>
@@ -170,6 +180,7 @@ body.splash-active #hud{visibility:hidden}
     <li>Tap an <b>ant</b> to grab its group, or <b>drag</b> on the ground to box-select a group, then tap where to send them.</li>
     <li>Tap a <b>Nursery</b> or <b>Barracks</b> to choose where new eggs hatch (workers vs. soldiers).</li>
     <li><b>Move the camera:</b> two-finger drag, right-drag, or arrow keys. <b>Zoom</b> with + / − , the mouse wheel, or pinch.</li>
+    <li><b>⏩ Speed</b> cycles 1× / 2× / 3× to play faster, and <b>⏸ Pause</b> (or the spacebar) freezes the action.</li>
   </ul>
 
   <h3>🏗️ Growing Your Colony</h3>
@@ -222,6 +233,7 @@ body.splash-active #hud{visibility:hidden}
     <div id="splash-title">ANT WARZ</div>
     <div id="splash-tagline">Build your colony. Crush your rivals.</div>
     <div id="splash-msg"></div>
+    <div id="splash-stats"></div>
     <button id="splash-continue">▶ Continue</button>
     <button id="splash-btn">Play</button>
     <button id="splash-help">📖 How to Play</button>
@@ -1084,7 +1096,18 @@ function resetSplashDOM(){
   document.getElementById('splash-title').style.animation='';
   document.getElementById('splash-tagline').style.display='';
   document.getElementById('splash-msg').textContent='';
+  document.getElementById('splash-stats').style.display='none';
   document.getElementById('splash-btn').textContent='Play';
+  document.body.classList.remove('paused');
+  document.getElementById('pause-btn').textContent='⏸ Pause';
+  document.getElementById('speed-btn').textContent='⏩ 1×';
+}
+function fmtTime(s){ s=Math.max(0,Math.floor(s)); const m=Math.floor(s/60); return m+'m '+(s%60)+'s'; }
+function showStats(){
+  const st=G.stats||{}, el=document.getElementById('splash-stats');
+  const rows=[['⏱️ Time survived',fmtTime(G.time)],['🐜 Ants raised',st.ants||0],['🗺️ Land unlocked','Region '+((G.region||0)+1)],['💥 Enemies defeated',st.enemies||0],['🐞 Bosses beaten',st.bosses||0],['🏴 Rival colonies crushed',st.rivals||0]];
+  el.innerHTML=rows.map(r=>'<div class="srow"><span>'+r[0]+'</span><span class="sv">'+r[1]+'</span></div>').join('');
+  el.style.display='block';
 }
 function placeBases(nest){ nestMound.position.set(nest.x,0,nest.z); }
 function startGame(){
@@ -1100,6 +1123,7 @@ function startGame(){
     queen:{x:nest.x,z:nest.z,hp:160,maxHp:160,layCd:5},
     phase:'dormant', raidActive:false, bossTimer:70, bossWarn:false,
     upgrades:{soldier:0,worker:0,catapult:0,dragonfly:0,queen:0},
+    speed:1, paused:false, stats:{ants:0,enemies:0,bosses:0,rivals:0},
     sel:[], buildMode:null, over:false, time:0, shake:0, _h:0, nurseHint:false, eggDest:'nursery' };
   for(let i=0;i<5;i++) addAnt('ant');
   addAnt('soldier'); addAnt('soldier');
@@ -1151,7 +1175,7 @@ function serialize(){
   return { v:1,
     food:G.food, sand:G.sand, wood:G.wood, rocks:G.rocks, region:G.region, time:G.time,
     phase:G.phase, raidActive:G.raidActive, bossTimer:G.bossTimer, bossWarn:G.bossWarn,
-    upgrades:G.upgrades, eggDest:G.eggDest, nurseHint:G.nurseHint,
+    upgrades:G.upgrades, speed:G.speed, stats:G.stats, eggDest:G.eggDest, nurseHint:G.nurseHint,
     queen:{hp:G.queen.hp,maxHp:G.queen.maxHp,layCd:G.queen.layCd},
     rivals:G.rivals.map(r=>({x:r.x,z:r.z,hp:r.hp,maxHp:r.maxHp,level:r.level,alive:r.alive,respawn:r.respawn,awake:r.awake,baseLvl:r.baseLvl})),
     ants:G.ants.filter(a=>a.alive).map(a=>({role:a.role,x:a.x,z:a.z,hp:a.hp,maxHp:a.maxHp,carryFood:a.carryFood||0,carryRocks:a.carryRocks||0})),
@@ -1239,6 +1263,7 @@ function loadProgress(){
     queen:{x:nest.x,z:nest.z,hp:d.queen.hp,maxHp:d.queen.maxHp,layCd:d.queen.layCd},
     phase:d.phase, raidActive:!!d.raidActive, bossTimer:d.bossTimer!=null?d.bossTimer:70, bossWarn:!!d.bossWarn,
     upgrades:Object.assign({soldier:0,worker:0,catapult:0,dragonfly:0,queen:0}, d.upgrades||{}),
+    speed:d.speed||1, paused:false, stats:Object.assign({ants:0,enemies:0,bosses:0,rivals:0}, d.stats||{}),
     sel:[], buildMode:null, over:false, time:d.time||0, shake:0, _h:0, nurseHint:!!d.nurseHint, eggDest:d.eggDest||'nursery' };
   if(d.rivals){ for(const rd of d.rivals){ addRival(rd.x,rd.z,rd.baseLvl||1); const r=G.rivals[G.rivals.length-1];
       r.hp=rd.hp; r.maxHp=rd.maxHp; r.level=rd.level; r.alive=rd.alive; r.respawn=rd.respawn||0; r.awake=!!rd.awake;
@@ -1492,11 +1517,12 @@ function tickEnemies(dt){
     if(!e.fly){ const wall=collideWalls(e,4);
       if(wall){ if(e.atkCd<=0){ wall.hp-=e.atk; e.atkCd=.7; burst(wall.x,wall.z,0xcc7744,3); if(wall.hp<=0){scene.remove(wall.view.g);disposeGroup(wall.view.g);G.cells.delete(cellKey(wall.gx,wall.gz));const i=G.builds.indexOf(wall);if(i>=0)G.builds.splice(i,1);} } } }
     // head to queen
-    if(d2(e.x,e.z,q.x,q.z)<10){ if(e.atkCd<=0){q.hp-=e.atk;e.atkCd=.8;G.shake=Math.min(3,(G.shake||0)+.5);floatText(q.x,10,q.z,'-'+e.atk,'#cc3322');} }
+    if(d2(e.x,e.z,q.x,q.z)<10){ if(e.atkCd<=0){q.hp-=e.atk;e.atkCd=.8;G.shake=Math.min(3,(G.shake||0)+.5);floatText(q.x,10,q.z,'-'+e.atk,'#cc3322');flashHurt();} }
     else moveTo(e,q.x,q.z,e.speed*slowMul,dt,8);
     clampTerr(e);
   }
   G.enemies=G.enemies.filter(e=>{ if(!e.alive){ scene.remove(e.view.g); disposeGroup(e.view.g);
+    if(G.stats){ G.stats.enemies++; if(e.boss)G.stats.bosses++; }
     if(e.boss){ if(e.labelEl)e.labelEl.remove();
       burst(e.x,e.z,0xffd24a,40,60,10); for(let i=0;i<6;i++)burst(e.x+rnd(-22,22),e.z+rnd(-22,22),0xff6a3a,10,40,rnd(2,14));
       G.food=Math.min(_foodCap,G.food+30); G.sand+=20; G.wood+=15; G.rocks+=10;
@@ -1716,7 +1742,7 @@ function tickColony(dt){
     }
   }
   if(!destFull)G._capMsg=null;
-  for(let i=G.hatch.length-1;i>=0;i--){ const h=G.hatch[i]; h.t-=dt; if(h.t<=0){ addAnt(h.kind,h.x,h.z); burst(h.x,h.z,0xf5b842,8); floatText(h.x,8,h.z,'🐜 hatched!','#f5b842'); SND.hatch(); if(h.labelEl)h.labelEl.remove(); G.hatch.splice(i,1); } }
+  for(let i=G.hatch.length-1;i>=0;i--){ const h=G.hatch[i]; h.t-=dt; if(h.t<=0){ addAnt(h.kind,h.x,h.z); if(G.stats)G.stats.ants++; burst(h.x,h.z,0xf5b842,8); floatText(h.x,8,h.z,'🐜 hatched!','#f5b842'); SND.hatch(); if(h.labelEl)h.labelEl.remove(); G.hatch.splice(i,1); } }
   G.food=Math.min(_foodCap,G.food+builtOf('fungus').length*2*dt);
   // upkeep disabled in test mode
   if(builtOf('barracks').length>0)for(const a of G.ants){if(a.alive&&a.role==='soldier')a.hp=Math.min(a.maxHp,a.hp+5*dt);}
@@ -1733,7 +1759,7 @@ function wakeRival(r){ if(r.awake||!r.alive)return; r.awake=true; r.raidTimer=5;
 function reviveRival(r){ r.alive=true; r.level++; r.maxHp=120+r.level*45; r.hp=r.maxHp; r.awake=true; r.raidTimer=Math.max(8,22-r.level*1.5);
   r.view.scale.set(1,1,1); r.view.traverse(o=>{if(o.isMesh&&o.userData.origMat)o.material=o.userData.origMat;});
   burst(r.x,r.z,0xcc3322,16,40,8); ticker('A rival colony has rebuilt, stronger (Lv '+r.level+').','#f0a890'); }
-function crushRival(r){ r.alive=false; r.respawn=20; r.awake=false; SND.rivalDown();
+function crushRival(r){ r.alive=false; r.respawn=20; r.awake=false; SND.rivalDown(); if(G.stats)G.stats.rivals++;
   burst(r.x,r.z,0xf5b842,30,50,10); for(let i=0;i<5;i++) burst(r.x+rnd(-18,18),r.z+rnd(-18,18),0xcc3322,10,40,rnd(2,16));
   r.view.scale.y=0.14; const deadMat=new THREE.MeshStandardMaterial({color:0x111109,roughness:1}); r.view.traverse(o=>{if(o.isMesh)o.material=deadMat;});
   r.dzone.visible=false;
@@ -1967,7 +1993,7 @@ function panCam(dx,dy){ _camDirty=true; const r=camRight(),f=camFwd(),k=camCfg.d
   camCfg.tx=clamp(camCfg.tx+(r.x*dx+f.x*dy)*k,WMIN,WMAX);
   camCfg.tz=clamp(camCfg.tz+(r.z*dx+f.z*dy)*k,WMIN,WMAX); }
 const keys={};
-window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true; if(e.key==='Escape'){document.getElementById('help').classList.remove('show');document.getElementById('upwrap').classList.remove('show');setBuild(null);}});
+window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true; if(e.key==='Escape'){document.getElementById('help').classList.remove('show');document.getElementById('upwrap').classList.remove('show');setBuild(null);} if(e.key===' '&&G&&!G.over){e.preventDefault();togglePause();}});
 window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
 function keyPan(dt){ let dx=0,dz=0; if(keys['a']||keys['arrowleft'])dx-=1; if(keys['d']||keys['arrowright'])dx+=1; if(keys['w'])dz-=1; if(keys['arrowup'])dz+=1; if(keys['s'])dz+=1; if(keys['arrowdown'])dz-=1;
   if(dx||dz){ _camDirty=true; const r=camRight(),f=camFwd(),k=camCfg.dist*1.4*dt; camCfg.tx=clamp(camCfg.tx+(r.x*dx-f.x*dz)*k,WMIN,WMAX); camCfg.tz=clamp(camCfg.tz+(r.z*dx-f.z*dz)*k,WMIN,WMAX);} }
@@ -2085,6 +2111,12 @@ document.getElementById('splash-continue').onclick=()=>{
 };
 (function(){ const mb=document.getElementById('mute-btn'); function refresh(){ mb.textContent=SND.isMuted()?'🔇':'🔊'; }
   refresh(); mb.onclick=()=>{ SND.resume(); SND.setMuted(!SND.isMuted()); if(!SND.isMuted())SND.startMusic(); refresh(); }; })();
+function cycleSpeed(){ if(!G||G.over)return; G.speed=(G.speed||1)>=3?1:(G.speed||1)+1; document.getElementById('speed-btn').textContent='⏩ '+G.speed+'×'; ticker('Game speed: '+G.speed+'×','#cfe9b0'); }
+function togglePause(){ if(!G||G.over)return; G.paused=!G.paused; document.body.classList.toggle('paused',G.paused); document.getElementById('pause-btn').textContent=G.paused?'▶ Resume':'⏸ Pause'; }
+document.getElementById('speed-btn').onclick=cycleSpeed;
+document.getElementById('pause-btn').onclick=togglePause;
+let _hurtCd=0;
+function flashHurt(){ const t=performance.now(); if(t-_hurtCd<400)return; _hurtCd=t; const f=document.getElementById('hurtflash'); f.style.opacity='1'; setTimeout(()=>{f.style.opacity='0';},60); }
 document.getElementById('save-btn').onclick=()=>{ if(G&&!G.over)saveProgress(false); };
 document.getElementById('upg-btn').onclick=openUpgrades;
 document.getElementById('upclose').onclick=()=>document.getElementById('upwrap').classList.remove('show');
@@ -2132,11 +2164,13 @@ function checkEnd(){ if(G.over)return;
 }
 function over(t,m,c){
   clearSave(); updateContinueBtn();   // a lost colony can't be continued
+  document.body.classList.remove('paused');
   document.getElementById('splash-title').textContent=t;
   document.getElementById('splash-title').style.color=c||'#ffdd44';
   document.getElementById('splash-title').style.animation='none';
   document.getElementById('splash-tagline').style.display='none';
   document.getElementById('splash-msg').textContent=m;
+  try{ showStats(); }catch(e){}
   document.getElementById('splash-btn').textContent='Play Again';
   document.body.classList.add('splash-active');
   document.getElementById('splash').classList.remove('hidden');
@@ -2181,31 +2215,37 @@ function drawMinimap(dt){
 // ===================================================================
 //  LOOP
 // ===================================================================
+// one simulation step (run 1–3× per frame for game speed; 0× when paused)
+function simulate(dt){
+  G.time+=dt;
+  try{tickRivals(dt);}catch(e){console.error('rivals',e);}
+  try{tickBosses(dt);}catch(e){console.error('bosses',e);}
+  try{tickColony(dt);}catch(e){console.error('colony',e);}
+  try{tickAnts(dt);}catch(e){console.error('ants',e);}
+  try{tickEnemies(dt);}catch(e){console.error('enemies',e);}
+  try{tickCritters(dt);}catch(e){console.error('critters',e);}
+  try{tickSpiders(dt);}catch(e){console.error('spiders',e);}
+  try{tickDragonflies(dt);}catch(e){console.error('dragonflies',e);}
+  try{tickScouts(dt);tickMedics(dt);}catch(e){console.error('scoutmedic',e);}
+  try{tickTraps(dt);tickWatch(dt);}catch(e){console.error('trapwatch',e);}
+  try{tickCatapults(dt);}catch(e){console.error('catapults',e);}
+  try{tickProjectiles(dt);}catch(e){console.error('projectiles',e);}
+  try{tickExpansion();}catch(e){console.error('expansion',e);}
+}
 function loop(){
   requestAnimationFrame(loop);
   const dt=Math.min(clock.getDelta(),0.05);
   if(G&&!G.over){
     _foodCap=99999+G.builds.filter(b=>b.kind==='store'&&b.built).length*40;
-    G.time+=dt; keyPan(dt);
-    try{tickRivals(dt);}catch(e){console.error('rivals',e);}
-    try{tickBosses(dt);}catch(e){console.error('bosses',e);}
-    try{tickColony(dt);}catch(e){console.error('colony',e);}
-    try{tickAnts(dt);}catch(e){console.error('ants',e);}
-    try{tickEnemies(dt);}catch(e){console.error('enemies',e);}
-    try{tickCritters(dt);}catch(e){console.error('critters',e);}
-    try{tickSpiders(dt);}catch(e){console.error('spiders',e);}
+    keyPan(dt);
+    const steps=G.paused?0:(G.speed||1);
+    for(let i=0;i<steps;i++) simulate(dt);
     try{tickDayNight();}catch(e){console.error('daynight',e);}
-    try{tickDragonflies(dt);}catch(e){console.error('dragonflies',e);}
-    try{tickScouts(dt);tickMedics(dt);}catch(e){console.error('scoutmedic',e);}
-    try{tickTraps(dt);tickWatch(dt);}catch(e){console.error('trapwatch',e);}
-    try{tickCatapults(dt);}catch(e){console.error('catapults',e);}
-    try{tickProjectiles(dt);}catch(e){console.error('projectiles',e);}
     try{sync(dt);}catch(e){console.error('sync',e);}
-    try{tickExpansion();}catch(e){console.error('expansion',e);}
     try{drawMinimap(dt);}catch(e){console.error('minimap',e);}
     try{tickParticles(dt);tickFloats(dt);}catch(e){console.error('fx',e);}
     G._h=(G._h||0)+dt; if(G._h>0.2){updateHUD();updateBanner();G._h=0;}
-    G._save=(G._save||0)+dt; if(G._save>5){saveProgress(true);G._save=0;}  // auto-save every ~5s
+    if(!G.paused){ G._save=(G._save||0)+dt; if(G._save>5){saveProgress(true);G._save=0;} }  // auto-save every ~5s
     checkEnd();
     // nest / queen hp label
     const qp=project(G.queen.x,20,G.queen.z);
