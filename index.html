@@ -43,6 +43,19 @@ body{background:#0e0a06;font-family:'Nunito',sans-serif;color:#f0d9a8;overflow:h
 .uprow button{background:#3d2510;border:1.5px solid #e8930a;color:#f5b842;border-radius:8px;padding:7px 10px;font-family:Nunito;font-weight:800;font-size:.68rem;cursor:pointer;white-space:nowrap}
 .uprow button:disabled{opacity:.4;cursor:not-allowed;border-color:#5c3a1e;color:#9a7a50}
 #upclose{display:block;margin:6px auto 0;background:#3d2510;border:1.5px solid #5c3a1e;color:#f0d9a8;border-radius:8px;padding:7px 24px;font-family:Nunito;font-weight:800;cursor:pointer}
+#help{display:none;position:fixed;inset:0;background:rgba(0,0,0,.74);z-index:120;align-items:center;justify-content:center;padding:12px}
+#help.show{display:flex}
+#helpbox{background:#1c1208;border:2px solid #5c3a1e;border-radius:16px;padding:18px 20px;width:min(96%,480px);max-height:88vh;overflow:auto}
+#helpbox h2{font-family:'Fredoka One';color:#f5b842;text-align:center;font-size:1.4rem}
+#helpbox .tag{text-align:center;color:#9a7a50;font-size:.72rem;margin-bottom:10px}
+#helpbox h3{color:#f5b842;font-size:.92rem;margin:14px 0 5px}
+#helpbox p{font-size:.74rem;line-height:1.5;color:#e8d4a8;margin-bottom:5px}
+#helpbox b{color:#ffd98a}
+#helpbox ul{margin:0 0 6px;padding:0;list-style:none}
+#helpbox li{font-size:.73rem;line-height:1.45;color:#e8d4a8;margin-bottom:4px}
+#helpclose{display:block;margin:16px auto 2px;background:#3d2510;border:2px solid #e8930a;color:#f5b842;border-radius:10px;padding:9px 32px;font-family:'Fredoka One';font-size:1rem;cursor:pointer}
+#splash-help{margin-top:12px;background:rgba(40,25,10,.55);border:1.5px solid #8a6a3a;color:#ffd680;font-family:Nunito;font-weight:800;font-size:.85rem;padding:8px 22px;border-radius:10px;cursor:pointer;animation:fadeInUp .5s ease .8s both}
+#splash-help:hover{background:rgba(70,45,18,.7)}
 #zoom button{width:36px;height:36px;border-radius:9px;border:1.5px solid #5c3a1e;background:rgba(30,18,8,.85);color:#f0d9a8;font-size:1.2rem;font-weight:800;cursor:pointer}
 #hud{background:#100702;border-top:2px solid #3d2510;padding:7px 9px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
 .row{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
@@ -117,6 +130,7 @@ body.splash-active #hud{visibility:hidden}
     <button class="b" id="sel-ants">Select all ants</button>
     <button class="b" id="sel-sol">Select all soldiers</button>
     <button class="b" id="upg-btn">🔬 Upgrades</button>
+    <button class="b" id="help-btn">❓ Help</button>
     <button class="b" id="save-btn">💾 Save</button>
     <span id="ticker">Tap an ant to select it, then tap where to send it...</span>
   </div>
@@ -130,6 +144,68 @@ body.splash-active #hud{visibility:hidden}
   <button id="upclose">Close</button>
 </div></div>
 
+<div id="help"><div id="helpbox">
+  <h2>🐜 How to Play</h2>
+  <div class="tag">Ant Warz — grow your colony, rule the world</div>
+
+  <h3>🎯 Your Goal</h3>
+  <p>Grow your ant colony, expand across the world, and <b>destroy every rival colony at once</b> to win. Protect your <b>👑 Queen</b> — if she dies, the colony is lost!</p>
+
+  <h3>🧺 Resources</h3>
+  <ul>
+    <li>🌿 <b>Food</b> — feeds the Queen so she lays eggs, and pays for upgrades. Tap leaf piles or catch bugs.</li>
+    <li>⛏️ <b>Sand</b> — builds most buildings. Clear grass &amp; bushes to get it.</li>
+    <li>🪵 <b>Wood</b> — chop down trees. Needed for catapults &amp; the workshop.</li>
+    <li>🪨 <b>Rocks</b> — catapult ammo. Collect rock piles.</li>
+  </ul>
+
+  <h3>👆 Controls</h3>
+  <ul>
+    <li>Tap <b>food, brush, trees, rocks, an enemy or a rival</b> — your nearest free ant goes automatically.</li>
+    <li>Tap an <b>ant</b> to grab its group, or <b>drag</b> on the ground to box-select a group, then tap where to send them.</li>
+    <li>Tap a <b>Nursery</b> or <b>Barracks</b> to choose where new eggs hatch (workers vs. soldiers).</li>
+    <li><b>Move the camera:</b> two-finger drag, right-drag, or arrow keys. <b>Zoom</b> with + / − , the mouse wheel, or pinch.</li>
+  </ul>
+
+  <h3>🏗️ Growing Your Colony</h3>
+  <p>The <b>👑 Queen</b> lays <b>🥚 eggs</b>; ants carry them to a <b>🍼 Nursery</b> (more workers) or <b>⚔️ Barracks</b> (more soldiers) to hatch. Build more of those to raise your limits.</p>
+
+  <h3>🗺️ Expanding the World</h3>
+  <p>You start in a small clearing. As your colony grows, <b>new land unlocks by itself</b> — at 8, 14, 20 &amp; 28 ants. The <b>minimap</b> shows your land (green), the locked world (dark), and where enemies &amp; resources are.</p>
+
+  <h3>🏠 Buildings</h3>
+  <ul>
+    <li>🍼 <b>Nursery</b> — raises your worker-ant limit.</li>
+    <li>⚔️ <b>Barracks</b> — raises your soldier limit &amp; heals soldiers.</li>
+    <li>🏚️ <b>Store</b> — lets you hold more food.</li>
+    <li>🍄 <b>Fungus</b> — slowly makes free food.</li>
+    <li>🧱 <b>Wall</b> — blocks and slows raiders.</li>
+    <li>🪲 <b>Perch</b> — spawns a <b>dragonfly</b> that dives on nearby enemies.</li>
+    <li>🪨 <b>Catapult</b> — auto-fires rocks with splash damage (keep it stocked with rock ammo!).</li>
+    <li>🔬 <b>Workshop</b> — unlocks the <b>Upgrades</b> menu.</li>
+  </ul>
+  <p>Tap <b>🔨 Demolish</b> then a building to remove it and get some resources back.</p>
+
+  <h3>⚠️ Dangers</h3>
+  <ul>
+    <li>🕷️ <b>Spiders</b> roam the wild and hunt your ants — more appear at <b>night</b>. Soldiers can fight them off.</li>
+    <li>🔴 <b>Rival colonies</b> wake up when your ants get close, then send raiders after your Queen.</li>
+    <li>🐞 <b>Boss</b> — a giant beetle storms in once you've expanded. Throw everything at it!</li>
+    <li>☀️🌙 <b>Day &amp; night</b> — the world cycles; nights are more dangerous.</li>
+  </ul>
+
+  <h3>🔬 Upgrades</h3>
+  <p>Build a <b>Workshop</b>, then tap <b>🔬 Upgrades</b> to spend resources making your soldiers, workers, catapults, dragonflies and Queen stronger.</p>
+
+  <h3>🏆 Winning &amp; Losing</h3>
+  <p><b>Win:</b> destroy every rival colony at the same time. <b>Lose:</b> if your Queen dies, or all your ants are gone.</p>
+
+  <h3>💾 Saving</h3>
+  <p>The game <b>auto-saves</b> as you play. Tap <b>💾 Save</b> to save right away, and use <b>▶ Continue</b> on the title screen to pick up where you left off.</p>
+
+  <button id="helpclose">Got it!</button>
+</div></div>
+
 <div id="splash">
   <canvas id="cine-canvas"></canvas>
   <div id="cine-vignette"></div>
@@ -139,6 +215,7 @@ body.splash-active #hud{visibility:hidden}
     <div id="splash-msg"></div>
     <button id="splash-continue">▶ Continue</button>
     <button id="splash-btn">Play</button>
+    <button id="splash-help">📖 How to Play</button>
   </div>
 </div>
 
@@ -1645,7 +1722,7 @@ function panCam(dx,dy){ _camDirty=true; const r=camRight(),f=camFwd(),k=camCfg.d
   camCfg.tx=clamp(camCfg.tx+(r.x*dx+f.x*dy)*k,WMIN,WMAX);
   camCfg.tz=clamp(camCfg.tz+(r.z*dx+f.z*dy)*k,WMIN,WMAX); }
 const keys={};
-window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true; if(e.key==='Escape')setBuild(null);});
+window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true; if(e.key==='Escape'){document.getElementById('help').classList.remove('show');document.getElementById('upwrap').classList.remove('show');setBuild(null);}});
 window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
 function keyPan(dt){ let dx=0,dz=0; if(keys['a']||keys['arrowleft'])dx-=1; if(keys['d']||keys['arrowright'])dx+=1; if(keys['w'])dz-=1; if(keys['arrowup'])dz+=1; if(keys['s'])dz+=1; if(keys['arrowdown'])dz-=1;
   if(dx||dz){ _camDirty=true; const r=camRight(),f=camFwd(),k=camCfg.dist*1.4*dt; camCfg.tx=clamp(camCfg.tx+(r.x*dx-f.x*dz)*k,WMIN,WMAX); camCfg.tz=clamp(camCfg.tz+(r.z*dx-f.z*dz)*k,WMIN,WMAX);} }
@@ -1761,6 +1838,13 @@ document.getElementById('save-btn').onclick=()=>{ if(G&&!G.over)saveProgress(fal
 document.getElementById('upg-btn').onclick=openUpgrades;
 document.getElementById('upclose').onclick=()=>document.getElementById('upwrap').classList.remove('show');
 document.getElementById('upwrap').addEventListener('pointerdown',e=>{ if(e.target.id==='upwrap')document.getElementById('upwrap').classList.remove('show'); e.stopPropagation(); });
+// how-to-play / help page (opens from the title screen and during gameplay)
+function openHelp(){ document.getElementById('help').classList.add('show'); const hb=document.getElementById('helpbox'); if(hb)hb.scrollTop=0; }
+function closeHelp(){ document.getElementById('help').classList.remove('show'); }
+document.getElementById('splash-help').onclick=openHelp;
+document.getElementById('help-btn').onclick=openHelp;
+document.getElementById('helpclose').onclick=closeHelp;
+document.getElementById('help').addEventListener('pointerdown',e=>{ if(e.target.id==='help')closeHelp(); e.stopPropagation(); });
 window.addEventListener('beforeunload',()=>{ if(G&&!G.over)saveProgress(true); });
 
 // ---------- HUD ----------
