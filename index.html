@@ -26,6 +26,9 @@ body{background:#0e0a06;font-family:'Nunito',sans-serif;color:#f0d9a8;overflow:h
 .chip{display:inline-flex;align-items:center;gap:5px;background:rgba(20,12,5,.82);border:1px solid #3d2510;border-radius:10px;padding:3px 8px;font-size:.74rem;font-weight:800;backdrop-filter:blur(3px)}
 .chip .v{color:#f5b842}
 #zoom{position:absolute;right:8px;bottom:8px;z-index:6;display:flex;flex-direction:column;gap:6px}
+#mmwrap{position:absolute;right:8px;top:8px;z-index:6;background:rgba(14,8,3,.78);border:1.5px solid #3d2510;border-radius:10px;padding:5px;backdrop-filter:blur(3px)}
+#mmap{display:block;width:150px;height:150px;border-radius:6px;background:#06070b}
+#mmlabel{text-align:center;font-size:.64rem;font-weight:800;color:#9be86a;margin-top:3px}
 #zoom button{width:36px;height:36px;border-radius:9px;border:1.5px solid #5c3a1e;background:rgba(30,18,8,.85);color:#f0d9a8;font-size:1.2rem;font-weight:800;cursor:pointer}
 #hud{background:#100702;border-top:2px solid #3d2510;padding:7px 9px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
 .row{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
@@ -79,6 +82,7 @@ body.splash-active #hud{visibility:hidden}
     <div id="rival"><span>Rival</span><div id="rb"><div id="rf"></div></div><span id="rlv">Lv 1</span></div>
   </div>
   <div id="zoom"><button id="zin">+</button><button id="zout">−</button></div>
+  <div id="mmwrap"><canvas id="mmap" width="150" height="150"></canvas><div id="mmlabel">Region 1</div></div>
   <div id="err">Could not load the 3D engine. Check your connection and reload.</div>
   <div id="ov"><div id="ovb"><h2 id="ovt">—</h2><p id="ovm"></p><button id="replay">Play Again</button></div></div>
 </div>
@@ -125,8 +129,17 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t;
 const d2=(ax,az,bx,bz)=>Math.hypot(ax-bx,az-bz);
 function lerpAng(a,b,t){let d=((b-a+Math.PI)%(Math.PI*2))-Math.PI;if(d<-Math.PI)d+=Math.PI*2;return a+d*t;}
 
-const MAP=1100, HALF=MAP/2, BOUND=HALF-40;
+const MAP=2000, HALF=MAP/2, WMIN=-HALF, WMAX=HALF, BOUND=HALF-40;
 const GRID=20, RIVAL_TRIGGER=140;
+// ---- world unlocks: territory is a rectangle anchored at the nest corner that
+//      grows outward (toward the rival) each time the colony hits a size milestone ----
+const REGION_STEP=380, START_FX=-280, START_FZ=280, REGION_ANTS=[0,8,14,20,28];
+function frontierX(r){ return Math.min(WMAX, START_FX+r*REGION_STEP); }
+function frontierZ(r){ return Math.max(WMIN, START_FZ-r*REGION_STEP); }
+function maxRegion(){ return REGION_ANTS.length-1; }
+function inTerritory(x,z){ const r=(G&&G.region)||0; return x>=WMIN+2&&x<=frontierX(r)-2&&z>=frontierZ(r)+2&&z<=WMAX-2; }
+function clampTerr(e){ const r=(G&&G.region)||0; e.x=clamp(e.x,WMIN+8,frontierX(r)-8); e.z=clamp(e.z,frontierZ(r)+8,WMAX-8); }
+function randTerrPoint(){ const r=(G&&G.region)||0,fx=frontierX(r),fz=frontierZ(r); return {x:rnd(WMIN+40,fx-40),z:rnd(fz+40,WMAX-40)}; }
 const COST={nursery:12,barracks:16,store:10,fungus:14,wall:4,perch:16,catapult:0};
 const WOODCOST={catapult:22};
 const BTIME={nursery:4,barracks:4,store:4,fungus:4,wall:1.5,perch:3,catapult:5};
@@ -141,7 +154,7 @@ stage.appendChild(renderer.domElement);
 
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x1a2a3a);
-scene.fog=new THREE.Fog(0x1a2a3a,560,1400);
+scene.fog=new THREE.Fog(0x1a2a3a,900,2700);
 
 const camera=new THREE.PerspectiveCamera(50,1,1,3000);
 const camCfg={yaw:0.6, phi:0.92, dist:190, tx:-150, tz:60};
@@ -162,8 +175,8 @@ scene.add(new THREE.HemisphereLight(0xcfe0ff,0x2a2014,0.7));
 const sun=new THREE.DirectionalLight(0xfff0d0,1.1);
 sun.position.set(120,200,80); sun.castShadow=true;
 sun.shadow.mapSize.set(2048,2048);
-sun.shadow.camera.near=40; sun.shadow.camera.far=1400;
-sun.shadow.camera.left=-660;sun.shadow.camera.right=660;sun.shadow.camera.top=660;sun.shadow.camera.bottom=-660;
+sun.shadow.camera.near=40; sun.shadow.camera.far=2600;
+sun.shadow.camera.left=-1050;sun.shadow.camera.right=1050;sun.shadow.camera.top=1050;sun.shadow.camera.bottom=-1050;
 sun.shadow.bias=-0.0004; scene.add(sun); scene.add(sun.target);
 
 // ---------- ground ----------
@@ -412,6 +425,20 @@ ghostTile.rotation.x=-Math.PI/2; ghostTile.position.y=0.3; ghostTile.visible=fal
 // rival danger zone (shown while dormant)
 const dangerZone=new THREE.Mesh(new THREE.CircleGeometry(RIVAL_TRIGGER,40), new THREE.MeshBasicMaterial({color:0xcc3322,transparent:true,opacity:0.12,side:THREE.DoubleSide}));
 dangerZone.rotation.x=-Math.PI/2; dangerZone.position.y=0.2; scene.add(dangerZone);
+// ---- dark overlay over not-yet-unlocked land (two planes covering the locked strips) ----
+const _lockMat=new THREE.MeshBasicMaterial({color:0x05060a,transparent:true,opacity:0.62,depthWrite:false,side:THREE.DoubleSide});
+function mkLockPlane(){const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),_lockMat);m.rotation.x=-Math.PI/2;m.position.y=0.6;m.renderOrder=1;scene.add(m);return m;}
+const lockPlaneE=mkLockPlane(), lockPlaneS=mkLockPlane();
+function updateLockedOverlay(){
+  const r=(G&&G.region)||0, fx=frontierX(r), fz=frontierZ(r);
+  const full=(fx>=WMAX-1&&fz<=WMIN+1);
+  lockPlaneE.visible=lockPlaneS.visible=!full;
+  if(full)return;
+  // east strip: x in [fx,WMAX], all z
+  const ew=Math.max(0,WMAX-fx); lockPlaneE.scale.set(ew,WMAX-WMIN,1); lockPlaneE.position.set((fx+WMAX)/2,0.6,(WMIN+WMAX)/2);
+  // south strip: z in [WMIN,fz], x in [WMIN,fx]
+  const sw=Math.max(0,fx-WMIN), sd=Math.max(0,fz-WMIN); lockPlaneS.scale.set(sw,sd,1); lockPlaneS.position.set((WMIN+fx)/2,0.6,(WMIN+fz)/2);
+}
 const snap=v=>Math.round(v/GRID)*GRID;
 const cellKey=(gx,gz)=>gx+'_'+gz;
 
@@ -745,27 +772,51 @@ function startGame(){
   for(const f of floats)f.el.remove(); floats.length=0;
   resetSplashDOM();
 
-  const nest={x:-320,z:100}, rival={x:320,z:-100};
+  const nest={x:-640,z:640}, rival={x:640,z:-640};
   placeBases(nest,rival,true);
 
-  G={ food:15, sand:0, wood:0, rocks:0, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], cells:new Set(), patches:[],
+  G={ food:15, sand:0, wood:0, rocks:0, region:0, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], cells:new Set(), patches:[],
     queen:{x:nest.x,z:nest.z,hp:160,maxHp:160,layCd:5},
     rival:{x:rival.x,z:rival.z,hp:120,maxHp:120,level:1,alive:true,respawn:0},
     phase:'dormant', raidTimer:0, raidWarn:false, raidActive:false,
     sel:[], buildMode:null, over:false, time:0, shake:0, _h:0, nurseHint:false, eggDest:'nursery' };
   for(let i=0;i<5;i++) addAnt('ant');
   addAnt('soldier'); addAnt('soldier');
-  // food piles spread across the map, kept away from the rival nest
-  for(let i=0;i<22;i++) addFood(rnd(-HALF+80,HALF-80),rnd(-HALF+80,HALF-80));
-  // dense vegetation covering most of the map
-  for(let i=0;i<80;i++) addClutter(rnd(-HALF+60,HALF-60),rnd(-HALF+60,HALF-60));
-  // rock deposits to collect as catapult ammo
-  for(let i=0;i<12;i++) addRockPile(rnd(-HALF+70,HALF-70),rnd(-HALF+70,HALF-70));
+  spawnRegionContent(0);          // fill the starting clearing with food / brush / rocks
+  updateLockedOverlay();
 
-  camCfg.yaw=0.6; camCfg.phi=0.92; camCfg.dist=190; camCfg.tx=nest.x; camCfg.tz=nest.z; _camDirty=true; placeCam();
+  camCfg.yaw=0.6; camCfg.phi=0.92; camCfg.dist=200; camCfg.tx=nest.x; camCfg.tz=nest.z; _camDirty=true; placeCam();
   const ban=document.getElementById('banner'); ban.classList.remove('war'); ban.classList.add('peace');
-  setBuild(null); ticker('Click food to gather or brush to clear — nearest free ant goes automatically!','#b9e08a'); updateHUD();
+  setBuild(null); ticker('A small clearing to start. Grow your colony and the world opens up!','#b9e08a'); updateHUD();
   clearSave(); updateContinueBtn();
+}
+
+// ===================================================================
+//  WORLD EXPANSION (territory unlocks as the colony grows)
+// ===================================================================
+function spawnRegionContent(r){
+  const fx=frontierX(r), fz=frontierZ(r), pfx=frontierX(r-1), pfz=frontierZ(r-1);
+  const inNew=(x,z)=> (x<=fx&&z>=fz) && (r===0 || !(x<=pfx&&z>=pfz));
+  function pick(){ for(let i=0;i<50;i++){ const x=rnd(WMIN+40,fx-40), z=rnd(fz+40,WMAX-40); if(inNew(x,z)) return {x,z}; } return null; }
+  const n = r===0 ? {food:16,clutter:58,rock:9} : {food:13,clutter:46,rock:8};
+  for(let i=0;i<n.food;i++){const p=pick();if(p)addFood(p.x,p.z);}
+  for(let i=0;i<n.clutter;i++){const p=pick();if(p)addClutter(p.x,p.z);}
+  for(let i=0;i<n.rock;i++){const p=pick();if(p)addRockPile(p.x,p.z);}
+}
+function unlockRegion(r){
+  G.region=r;
+  spawnRegionContent(r);
+  updateLockedOverlay();
+  burst(G.nest.x,G.nest.z,0x9be86a,24,46,12);
+  G.shake=Math.min(3,(G.shake||0)+1.2);
+  const last=r>=maxRegion();
+  ticker(last?'🌍 The whole world is yours to roam! New frontiers unlocked.':'🌍 New land unlocked! Your territory has grown — explore it.','#9be86a');
+}
+function tickExpansion(){
+  const next=G.region+1;
+  if(next>maxRegion())return;
+  const have=G.ants.filter(a=>a.alive).length;
+  if(have>=REGION_ANTS[next]) unlockRegion(next);
 }
 
 // ===================================================================
@@ -774,7 +825,7 @@ function startGame(){
 const SAVE_KEY='antwarz_save_v1';
 function serialize(){
   return { v:1,
-    food:G.food, sand:G.sand, wood:G.wood, rocks:G.rocks, time:G.time,
+    food:G.food, sand:G.sand, wood:G.wood, rocks:G.rocks, region:G.region, time:G.time,
     phase:G.phase, raidTimer:G.raidTimer, raidWarn:G.raidWarn, raidActive:G.raidActive,
     eggDest:G.eggDest, nurseHint:G.nurseHint,
     queen:{hp:G.queen.hp,maxHp:G.queen.maxHp,layCd:G.queen.layCd},
@@ -825,9 +876,9 @@ function loadProgress(){
   clearWorld();
   for(const f of floats)f.el.remove(); floats.length=0;
   resetSplashDOM();
-  const nest={x:-320,z:100}, rival={x:320,z:-100};
+  const nest={x:-640,z:640}, rival={x:640,z:-640};
   placeBases(nest,rival,d.phase==='dormant');
-  G={ food:d.food, sand:d.sand, wood:d.wood, rocks:d.rocks, nest,
+  G={ food:d.food, sand:d.sand, wood:d.wood, rocks:d.rocks, region:d.region||0, nest,
     ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], cells:new Set(), patches:[],
     queen:{x:nest.x,z:nest.z,hp:d.queen.hp,maxHp:d.queen.maxHp,layCd:d.queen.layCd},
     rival:{x:rival.x,z:rival.z,hp:d.rival.hp,maxHp:d.rival.maxHp,level:d.rival.level,alive:d.rival.alive,respawn:d.rival.respawn},
@@ -842,7 +893,8 @@ function loadProgress(){
   (d.rockpiles||[]).forEach(reRock);
   (d.eggs||[]).forEach(reEgg);
   (d.hatch||[]).forEach(reHatch);
-  camCfg.yaw=0.6; camCfg.phi=0.92; camCfg.dist=190; camCfg.tx=nest.x; camCfg.tz=nest.z; _camDirty=true; placeCam();
+  updateLockedOverlay();
+  camCfg.yaw=0.6; camCfg.phi=0.92; camCfg.dist=200; camCfg.tx=nest.x; camCfg.tz=nest.z; _camDirty=true; placeCam();
   const ban=document.getElementById('banner'); ban.classList.remove('war','peace'); ban.classList.add(G.phase==='war'?'war':'peace');
   setBuild(null); ticker('Progress restored — welcome back!','#9be86a'); updateHUD();
 }
@@ -897,7 +949,7 @@ function tickAnts(dt){
     if(o){ runOrder(a,o,dt); }
     else { autoAnt(a,dt); }
     collideWalls(a,3);
-    a.x=clamp(a.x,-BOUND,BOUND);a.z=clamp(a.z,-BOUND,BOUND);
+    clampTerr(a);
   }
 }
 function runOrder(a,o,dt){
@@ -946,7 +998,7 @@ function nearestRockPile(a){let best=null,bd=1e9;for(const r of G.rockpiles){if(
 function doGather(a,f,dt){
   if(d2(a.x,a.z,f.x,f.z)>7){ moveTo(a,f.x,f.z,a.speed,dt,7); return; }
   const take=Math.min(f.amount,5);f.amount-=take;a.carryFood=take;burst(a.x,a.z,0x6ec22e,4);
-  if(f.amount<=0){scene.remove(f.view.g);const i=G.foods.indexOf(f);if(i>=0)G.foods.splice(i,1);if(Math.random()<.7)addFood(rnd(-HALF+60,HALF-60),rnd(-HALF+60,HALF-60));}
+  if(f.amount<=0){scene.remove(f.view.g);const i=G.foods.indexOf(f);if(i>=0)G.foods.splice(i,1);if(Math.random()<.7){const p=randTerrPoint();addFood(p.x,p.z);}}
   if(a.order&&a.order.type==='gather')a.order=null;
 }
 function doClear(a,c,dt){
@@ -961,7 +1013,7 @@ function doClear(a,c,dt){
 function doCollectRocks(a,r,dt){
   if(d2(a.x,a.z,r.x,r.z)>7){ moveTo(a,r.x,r.z,a.speed,dt,7); return; }
   const take=Math.min(r.amount,4); r.amount-=take; a.carryRocks=(a.carryRocks||0)+take; burst(a.x,a.z,0x9a9aa0,4);
-  if(r.amount<=0){ scene.remove(r.view.g); disposeGroup(r.view.g); const i=G.rockpiles.indexOf(r); if(i>=0)G.rockpiles.splice(i,1); if(Math.random()<.6)addRockPile(rnd(-HALF+70,HALF-70),rnd(-HALF+70,HALF-70)); }
+  if(r.amount<=0){ scene.remove(r.view.g); disposeGroup(r.view.g); const i=G.rockpiles.indexOf(r); if(i>=0)G.rockpiles.splice(i,1); if(Math.random()<.6){const p=randTerrPoint();addRockPile(p.x,p.z);} }
   if(a.order&&a.order.type==='collect')a.order=null;
 }
 function doBuild(a,b,dt){
@@ -1038,7 +1090,7 @@ function tickEnemies(dt){
     // head to queen
     if(d2(e.x,e.z,q.x,q.z)<10){ if(e.atkCd<=0){q.hp-=e.atk;e.atkCd=.8;G.shake=Math.min(3,(G.shake||0)+.5);floatText(q.x,10,q.z,'-'+e.atk,'#cc3322');} }
     else moveTo(e,q.x,q.z,e.speed,dt,8);
-    e.x=clamp(e.x,-BOUND,BOUND);e.z=clamp(e.z,-BOUND,BOUND);
+    clampTerr(e);
   }
   G.enemies=G.enemies.filter(e=>{if(!e.alive){scene.remove(e.view.g);return false;}return true;});
 }
@@ -1165,7 +1217,7 @@ function tickColony(dt){
   G.food=Math.min(_foodCap,G.food+builtOf('fungus').length*2*dt);
   // upkeep disabled in test mode
   if(builtOf('barracks').length>0)for(const a of G.ants){if(a.alive&&a.role==='soldier')a.hp=Math.min(a.maxHp,a.hp+5*dt);}
-  if(G.foods.filter(f=>f.amount>0).length<6 && Math.random()<dt*0.3) addFood(rnd(-HALF+60,HALF-60),rnd(-HALF+60,HALF-60));
+  if(G.foods.filter(f=>f.amount>0).length<6 && Math.random()<dt*0.3){const p=randTerrPoint();addFood(p.x,p.z);}
 }
 
 // ---------- phase / rival ----------
@@ -1203,7 +1255,7 @@ function cellValid(gx,gz){
   if(G.cells.has(cellKey(gx,gz))) return false;
   if(d2(gx,gz,G.nest.x,G.nest.z)<GRID*1.4) return false;
   if(d2(gx,gz,G.rival.x,G.rival.z)<GRID*1.6) return false;
-  if(Math.abs(gx)>BOUND||Math.abs(gz)>BOUND) return false;
+  if(!inTerritory(gx,gz)) return false;
   return true;
 }
 function placeBuild(kind,wx,wz){
@@ -1342,23 +1394,23 @@ window.addEventListener('pointerup',ev=>{
 });
 // right-click cancels build or demolish mode
 stage.addEventListener('contextmenu',e=>{e.preventDefault(); if(G&&G.buildMode)setBuild(null);});
-stage.addEventListener('wheel',e=>{e.preventDefault();camCfg.dist=clamp(camCfg.dist*(1+Math.sign(e.deltaY)*0.1),90,360);_camDirty=true;},{passive:false});
+stage.addEventListener('wheel',e=>{e.preventDefault();camCfg.dist=clamp(camCfg.dist*(1+Math.sign(e.deltaY)*0.1),90,650);_camDirty=true;},{passive:false});
 stage.addEventListener('touchstart',e=>{touches=e.touches.length;});
 stage.addEventListener('touchend',e=>{touches=e.touches.length;_pd=0;});
 stage.addEventListener('touchmove',e=>{ if(e.touches.length===2){e.preventDefault();
   const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-  if(_pd){camCfg.dist=clamp(camCfg.dist*(_pd/d),90,360);_camDirty=true;} _pd=d; pmoved=true;} },{passive:false});
-document.getElementById('zin').onclick=()=>{camCfg.dist=clamp(camCfg.dist*0.85,90,360);_camDirty=true;};
-document.getElementById('zout').onclick=()=>{camCfg.dist=clamp(camCfg.dist*1.18,90,360);_camDirty=true;};
+  if(_pd){camCfg.dist=clamp(camCfg.dist*(_pd/d),90,650);_camDirty=true;} _pd=d; pmoved=true;} },{passive:false});
+document.getElementById('zin').onclick=()=>{camCfg.dist=clamp(camCfg.dist*0.85,90,650);_camDirty=true;};
+document.getElementById('zout').onclick=()=>{camCfg.dist=clamp(camCfg.dist*1.18,90,650);_camDirty=true;};
 
 function panCam(dx,dy){ _camDirty=true; const r=camRight(),f=camFwd(),k=camCfg.dist*0.0016;
-  camCfg.tx=clamp(camCfg.tx+(r.x*dx+f.x*dy)*k,-BOUND,BOUND);
-  camCfg.tz=clamp(camCfg.tz+(r.z*dx+f.z*dy)*k,-BOUND,BOUND); }
+  camCfg.tx=clamp(camCfg.tx+(r.x*dx+f.x*dy)*k,WMIN,WMAX);
+  camCfg.tz=clamp(camCfg.tz+(r.z*dx+f.z*dy)*k,WMIN,WMAX); }
 const keys={};
 window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true; if(e.key==='Escape')setBuild(null);});
 window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
 function keyPan(dt){ let dx=0,dz=0; if(keys['a']||keys['arrowleft'])dx-=1; if(keys['d']||keys['arrowright'])dx+=1; if(keys['w'])dz-=1; if(keys['arrowup'])dz+=1; if(keys['s'])dz+=1; if(keys['arrowdown'])dz-=1;
-  if(dx||dz){ _camDirty=true; const r=camRight(),f=camFwd(),k=camCfg.dist*1.4*dt; camCfg.tx=clamp(camCfg.tx+(r.x*dx-f.x*dz)*k,-BOUND,BOUND); camCfg.tz=clamp(camCfg.tz+(r.z*dx-f.z*dz)*k,-BOUND,BOUND);} }
+  if(dx||dz){ _camDirty=true; const r=camRight(),f=camFwd(),k=camCfg.dist*1.4*dt; camCfg.tx=clamp(camCfg.tx+(r.x*dx-f.x*dz)*k,WMIN,WMAX); camCfg.tz=clamp(camCfg.tz+(r.z*dx-f.z*dz)*k,WMIN,WMAX);} }
 
 // ---------- selection ----------
 function selectGroup(a){ clearSel(); const r=60; for(const o of G.ants)if(o.alive&&o.role===a.role&&d2(a.x,a.z,o.x,o.z)<r)G.sel.push(o); ticker(G.sel.length+' '+(a.role==='soldier'?'soldier':'ant')+'(s) selected.','#cfe9b0'); }
@@ -1484,6 +1536,8 @@ function updateHUD(){ if(!G)return;
   document.querySelectorAll('#builds .b[data-build]').forEach(b=>{const k=b.dataset.build;if(COST[k]!==undefined||WOODCOST[k]!==undefined)b.disabled=!canAfford(k);});
   document.getElementById('rf').style.width=(G.rival.alive?G.rival.hp/G.rival.maxHp*100:0)+'%';
   document.getElementById('rlv').textContent='Lv '+G.rival.level;
+  const mml=document.getElementById('mmlabel');
+  if(mml) mml.textContent = G.region>=maxRegion() ? 'Whole world open' : 'Next land: '+REGION_ANTS[G.region+1]+' ants';
 }
 function updateBanner(){ if(!G)return;
   if(G.phase==='dormant'){document.getElementById('btext').textContent='Peaceful build-up — rival dormant';document.getElementById('btime').textContent='';}
@@ -1513,6 +1567,30 @@ window.addEventListener('resize',resize);
 // ---------- queen hp bar via float (simple) ----------
 let qbarEl=document.createElement('div');qbarEl.className='float';qbarEl.style.fontSize='.7rem';labels.appendChild(qbarEl);
 
+// ---------- minimap ----------
+const mmCanvas=document.getElementById('mmap'), mmCtx=mmCanvas.getContext('2d');
+let _mmT=0;
+function drawMinimap(dt){
+  _mmT+=dt; if(_mmT<0.15)return; _mmT=0;
+  const W=150,H=150, s=W/(WMAX-WMIN);
+  const mx=x=>(x-WMIN)*s, mz=z=>(z-WMIN)*s;
+  mmCtx.fillStyle='#0a0c12'; mmCtx.fillRect(0,0,W,H);
+  const fx=frontierX(G.region), fz=frontierZ(G.region);
+  const tx0=mx(WMIN),tz0=mz(fz),tw=mx(fx)-mx(WMIN),th=mz(WMAX)-mz(fz);
+  mmCtx.fillStyle='#24401f'; mmCtx.fillRect(tx0,tz0,tw,th);
+  mmCtx.strokeStyle='#4a7a3a'; mmCtx.lineWidth=1; mmCtx.strokeRect(tx0+.5,tz0+.5,tw-1,th-1);
+  for(const b of G.builds){ mmCtx.fillStyle=b.built?'#6aa8ff':'#3a5a80'; mmCtx.fillRect(mx(b.x)-1.5,mz(b.z)-1.5,3,3); }
+  const dot=(x,z,c,r)=>{ mmCtx.fillStyle=c; mmCtx.beginPath(); mmCtx.arc(mx(x),mz(z),r,0,7); mmCtx.fill(); };
+  for(const f of G.foods) dot(f.x,f.z,'#5ec23a',1);
+  for(const r of G.rockpiles) dot(r.x,r.z,'#aeb0b8',1);
+  for(const a of G.ants){ if(a.alive) dot(a.x,a.z,a.role==='soldier'?'#ff9a3a':'#cfe9b0',1.1); }
+  for(const df of G.dragonflies) dot(df.x,df.z,'#8fe0d0',1.4);
+  for(const e of G.enemies){ if(e.alive) dot(e.x,e.z,'#ff3b30',1.6); }
+  dot(G.nest.x,G.nest.z,'#ffd24a',3);
+  if(G.rival.alive) dot(G.rival.x,G.rival.z,'#cc3322',3);
+  mmCtx.strokeStyle='rgba(255,255,255,.55)'; mmCtx.strokeRect(mx(camCfg.tx)-5,mz(camCfg.tz)-5,10,10);
+}
+
 // ===================================================================
 //  LOOP
 // ===================================================================
@@ -1530,6 +1608,8 @@ function loop(){
     try{tickCatapults(dt);}catch(e){console.error('catapults',e);}
     try{tickProjectiles(dt);}catch(e){console.error('projectiles',e);}
     try{sync(dt);}catch(e){console.error('sync',e);}
+    try{tickExpansion();}catch(e){console.error('expansion',e);}
+    try{drawMinimap(dt);}catch(e){console.error('minimap',e);}
     try{tickParticles(dt);tickFloats(dt);}catch(e){console.error('fx',e);}
     G._h=(G._h||0)+dt; if(G._h>0.2){updateHUD();updateBanner();G._h=0;}
     G._save=(G._save||0)+dt; if(G._save>5){saveProgress(true);G._save=0;}  // auto-save every ~5s
