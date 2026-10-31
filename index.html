@@ -57,6 +57,8 @@ body.splash-active #hud{visibility:hidden}
 #splash-msg{color:#ffb060;font-size:.9rem;font-weight:700;margin-bottom:14px;min-height:1.4em;text-shadow:0 2px 6px rgba(0,0,0,.9)}
 #splash-btn{background:rgba(80,35,8,.88);border:2px solid #ff9933;color:#ffdd44;font-family:'Fredoka One';font-size:1.4rem;padding:12px 48px;border-radius:14px;cursor:pointer;transition:background .15s,transform .1s;animation:fadeInUp .5s ease .6s both,btnGlow 2.5s ease-in-out 1.4s infinite}
 #splash-btn:hover{background:rgba(120,55,15,.9);transform:scale(1.05)}
+#splash-continue{display:none;background:rgba(28,66,22,.92);border:2px solid #7bd653;color:#dcffc6;font-family:'Fredoka One';font-size:1.15rem;padding:10px 40px;border-radius:12px;cursor:pointer;margin-bottom:14px;transition:background .15s,transform .1s;animation:fadeInUp .5s ease .5s both}
+#splash-continue:hover{background:rgba(42,92,32,.96);transform:scale(1.04)}
 </style>
 </head>
 <body>
@@ -95,6 +97,7 @@ body.splash-active #hud{visibility:hidden}
   <div class="row">
     <button class="b" id="sel-ants">Select all ants</button>
     <button class="b" id="sel-sol">Select all soldiers</button>
+    <button class="b" id="save-btn">💾 Save</button>
     <span id="ticker">Tap an ant to select it, then tap where to send it...</span>
   </div>
   <div id="legend">Click <b>food</b>, <b>brush</b>, <b>trees</b> (wood), <b>rocks</b> (catapult ammo), <b>enemy</b>, or <b>rival</b> — nearest free ant dispatches automatically · chop trees for wood to build a <b>catapult</b>, then collect rocks so it can fire · tap an ant to grab its group · drag on ground to box-select a group · tap <b>nursery</b> or <b>barracks</b> to route eggs · two-finger or right-drag (or arrow keys) to pan · pick a build then tap the glowing grid to place it</div>
@@ -107,6 +110,7 @@ body.splash-active #hud{visibility:hidden}
     <div id="splash-title">ANT WARZ</div>
     <div id="splash-tagline">Build your colony. Crush your rivals.</div>
     <div id="splash-msg"></div>
+    <button id="splash-continue">▶ Continue</button>
     <button id="splash-btn">Play</button>
   </div>
 </div>
@@ -345,9 +349,9 @@ function buildFood(){
   const hit=new THREE.Mesh(new THREE.SphereGeometry(8,8,6),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=3;g.add(hit);
   return {g,hit};
 }
-function buildClutter(){
+function buildClutter(forceType){
   const g=new THREE.Group();
-  const roll=Math.random();
+  const roll=forceType==='grass'?0.1:forceType==='bush'?0.6:forceType==='tree'?0.9:Math.random();
   let type;
   if(roll<0.45){ type='grass'; // tall grass: a tuft of swaying blades
     for(let i=0;i<7;i++){const b=new THREE.Mesh(G_cone,new THREE.MeshStandardMaterial({color:i%2?0x5a8a30:0x6ea83a,roughness:.9}));
@@ -703,21 +707,22 @@ function startCinematic(){
 }
 function destroyCinematic(){if(_cineCleanup){_cineCleanup();_cineCleanup=null;}}
 
-function startGame(){
-  // clear
-  if(G){ for(const a of G.ants){disposeGroup(a.view.g);scene.remove(a.view.g);}
-    for(const e of G.enemies){disposeGroup(e.view.g);scene.remove(e.view.g);}
-    for(const b of G.builds){if(b.labelEl)b.labelEl.remove();disposeGroup(b.view.g);scene.remove(b.view.g);}
-    for(const f of G.foods){disposeGroup(f.view.g);scene.remove(f.view.g);}
-    for(const c of G.clutter){disposeGroup(c.view.g);scene.remove(c.view.g);}
-    for(const e of G.eggs){scene.remove(e.mesh);if(e.labelEl)e.labelEl.remove();}
-    for(const h of G.hatch)if(h.labelEl)h.labelEl.remove();
-    if(G.dragonflies)for(const df of G.dragonflies){disposeGroup(df.view.g);scene.remove(df.view.g);scene.remove(df.view.shadow);df.view.shadow.geometry.dispose();df.view.shadow.material.dispose();}
-    if(G.rockpiles)for(const r of G.rockpiles){disposeGroup(r.view.g);scene.remove(r.view.g);}
-    if(G.projectiles)for(const pr of G.projectiles){scene.remove(pr.mesh);pr.mesh.material.dispose();}
-    for(const p of G.patches){p.geometry.dispose();p.material.dispose();scene.remove(p);}
-  }
-  for(const f of floats)f.el.remove(); floats.length=0;
+function clearWorld(){
+  if(!G)return;
+  for(const a of G.ants){disposeGroup(a.view.g);scene.remove(a.view.g);}
+  for(const e of G.enemies){disposeGroup(e.view.g);scene.remove(e.view.g);}
+  for(const b of G.builds){if(b.labelEl)b.labelEl.remove();disposeGroup(b.view.g);scene.remove(b.view.g);}
+  for(const f of G.foods){disposeGroup(f.view.g);scene.remove(f.view.g);}
+  for(const c of G.clutter){disposeGroup(c.view.g);scene.remove(c.view.g);}
+  for(const e of G.eggs){scene.remove(e.mesh);if(e.labelEl)e.labelEl.remove();}
+  for(const h of G.hatch)if(h.labelEl)h.labelEl.remove();
+  if(G.dragonflies)for(const df of G.dragonflies){disposeGroup(df.view.g);scene.remove(df.view.g);scene.remove(df.view.shadow);df.view.shadow.geometry.dispose();df.view.shadow.material.dispose();}
+  if(G.rockpiles)for(const r of G.rockpiles){disposeGroup(r.view.g);scene.remove(r.view.g);}
+  if(G.projectiles)for(const pr of G.projectiles){scene.remove(pr.mesh);pr.mesh.material.dispose();}
+  for(const p of G.patches){p.geometry.dispose();p.material.dispose();scene.remove(p);}
+}
+// reset the splash DOM back to its fresh "ANT WARZ / Play" state
+function resetSplashDOM(){
   document.getElementById('ov').classList.remove('show');
   document.getElementById('splash-title').textContent='ANT WARZ';
   document.getElementById('splash-title').style.color='#ffdd44';
@@ -725,13 +730,23 @@ function startGame(){
   document.getElementById('splash-tagline').style.display='';
   document.getElementById('splash-msg').textContent='';
   document.getElementById('splash-btn').textContent='Play';
-
-  const nest={x:-320,z:100}, rival={x:320,z:-100};
+}
+// place the fixed nest + rival structures and their danger zone
+function placeBases(nest,rival,dormant){
   nestMound.position.set(nest.x,0,nest.z);
   rivalView.scale.set(1,1,1);
   rivalView.traverse(o=>{if(o.isMesh&&o.userData.origMat)o.material=o.userData.origMat;});
   rivalView.position.set(rival.x,0,rival.z);
-  dangerZone.position.set(rival.x,0.2,rival.z); dangerZone.visible=true;
+  dangerZone.position.set(rival.x,0.2,rival.z); dangerZone.visible=dormant;
+}
+function startGame(){
+  // clear
+  clearWorld();
+  for(const f of floats)f.el.remove(); floats.length=0;
+  resetSplashDOM();
+
+  const nest={x:-320,z:100}, rival={x:320,z:-100};
+  placeBases(nest,rival,true);
 
   G={ food:15, sand:0, wood:0, rocks:0, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], cells:new Set(), patches:[],
     queen:{x:nest.x,z:nest.z,hp:160,maxHp:160,layCd:5},
@@ -750,6 +765,86 @@ function startGame(){
   camCfg.yaw=0.6; camCfg.phi=0.92; camCfg.dist=190; camCfg.tx=nest.x; camCfg.tz=nest.z; _camDirty=true; placeCam();
   const ban=document.getElementById('banner'); ban.classList.remove('war'); ban.classList.add('peace');
   setBuild(null); ticker('Click food to gather or brush to clear — nearest free ant goes automatically!','#b9e08a'); updateHUD();
+  clearSave(); updateContinueBtn();
+}
+
+// ===================================================================
+//  SAVE / LOAD  (progress persists in the browser's local storage)
+// ===================================================================
+const SAVE_KEY='antwarz_save_v1';
+function serialize(){
+  return { v:1,
+    food:G.food, sand:G.sand, wood:G.wood, rocks:G.rocks, time:G.time,
+    phase:G.phase, raidTimer:G.raidTimer, raidWarn:G.raidWarn, raidActive:G.raidActive,
+    eggDest:G.eggDest, nurseHint:G.nurseHint,
+    queen:{hp:G.queen.hp,maxHp:G.queen.maxHp,layCd:G.queen.layCd},
+    rival:{hp:G.rival.hp,maxHp:G.rival.maxHp,level:G.rival.level,alive:G.rival.alive,respawn:G.rival.respawn},
+    ants:G.ants.filter(a=>a.alive).map(a=>({role:a.role,x:a.x,z:a.z,hp:a.hp,maxHp:a.maxHp,carryFood:a.carryFood||0,carryRocks:a.carryRocks||0})),
+    enemies:G.enemies.filter(e=>e.alive).map(e=>({x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,speed:e.speed,atk:e.atk})),
+    builds:G.builds.map(b=>({kind:b.kind,gx:b.gx,gz:b.gz,built:b.built,prog:b.prog||0,hp:b.hp})),
+    foods:G.foods.filter(f=>f.amount>0).map(f=>({x:f.x,z:f.z,amount:f.amount})),
+    clutter:G.clutter.filter(c=>!c.removed).map(c=>({x:c.x,z:c.z,type:c.type})),
+    rockpiles:G.rockpiles.filter(r=>r.amount>0).map(r=>({x:r.x,z:r.z,amount:r.amount})),
+    eggs:G.eggs.map(e=>({x:e.x,z:e.z,dest:e.dest})),
+    hatch:G.hatch.map(h=>({x:h.x,z:h.z,kind:h.kind,t:h.t})) };
+}
+function saveProgress(silent){
+  if(!G||G.over)return;
+  try{ localStorage.setItem(SAVE_KEY,JSON.stringify(serialize())); updateContinueBtn(); if(!silent)ticker('Progress saved! Close the tab anytime — "Continue" brings it back.','#9be86a'); }
+  catch(e){ if(!silent)ticker('Could not save — your browser is blocking storage.','#e06050'); }
+}
+function hasSave(){ try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; } }
+function clearSave(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+function updateContinueBtn(){ const c=document.getElementById('splash-continue'); if(c)c.style.display=hasSave()?'inline-block':'none'; }
+// --- rebuild one entity from saved data, reusing the normal model builders ---
+function reAnt(d){ const v=buildAnt(d.role); v.g.position.set(d.x,0,d.z); scene.add(v.g);
+  G.ants.push({x:d.x,z:d.z,role:d.role,alive:true,hp:d.hp,maxHp:d.maxHp,speed:d.role==='soldier'?34:28,
+    heading:0,wob:rnd(0,7),flash:0,atkCd:0,carryFood:d.carryFood||0,carryRocks:d.carryRocks||0,
+    carryEgg:null,order:null,hold:{x:d.x,z:d.z},sentryTarget:null,sentryPause:0,view:v}); }
+function reEnemy(d){ const v=buildEnemy(); v.g.position.set(d.x,0,d.z); scene.add(v.g);
+  G.enemies.push({x:d.x,z:d.z,hp:d.hp,maxHp:d.maxHp,speed:d.speed,atk:d.atk,alive:true,heading:0,wob:rnd(0,7),flash:0,atkCd:0,view:v}); }
+function reBuild(d){ const v=buildStruct(d.kind); v.g.position.set(d.gx,0,d.gz); scene.add(v.g);
+  const b={kind:d.kind,x:d.gx,z:d.gz,gx:d.gx,gz:d.gz,built:d.built,prog:d.prog||0,hp:d.hp,view:v};
+  if(!d.built){ v.g.traverse(o=>{ if(o.isMesh){ o.userData.solid=o.material; o.material=M.ghost; o.castShadow=false; } }); }
+  G.builds.push(b); G.cells.add(cellKey(d.gx,d.gz));
+  if(d.built){
+    if(d.kind==='nursery'||d.kind==='barracks'){const lel=document.createElement('div');lel.className='float';lel.style.fontSize='.65rem';lel.style.pointerEvents='none';labels.appendChild(lel);b.labelEl=lel;}
+    if(d.kind==='perch') spawnDragonfly(b);
+  } }
+function reFood(d){ const v=buildFood(); v.g.position.set(d.x,0,d.z); scene.add(v.g); G.foods.push({x:d.x,z:d.z,amount:d.amount,view:v}); }
+function reRock(d){ const v=buildRockPile(); v.g.position.set(d.x,0,d.z); scene.add(v.g); G.rockpiles.push({x:d.x,z:d.z,amount:d.amount,view:v}); }
+function reClutter(d){ const v=buildClutter(d.type); v.g.position.set(d.x,0,d.z); scene.add(v.g); G.clutter.push({x:d.x,z:d.z,type:v.type,view:v}); }
+function reEgg(d){ const v=buildEggMesh(); v.position.set(d.x,12,d.z); scene.add(v);
+  const lel=document.createElement('div');lel.className='float';lel.style.fontSize='.65rem';lel.style.pointerEvents='none';labels.appendChild(lel);
+  G.eggs.push({x:d.x,z:d.z,y:12,dest:d.dest||'nursery',carrier:null,claimed:null,mesh:v,labelEl:lel}); }
+function reHatch(d){ const lel=document.createElement('div');lel.className='float';lel.style.fontSize='.65rem';lel.style.pointerEvents='none';labels.appendChild(lel);
+  G.hatch.push({x:d.x,z:d.z,kind:d.kind,t:d.t,labelEl:lel}); }
+function loadProgress(){
+  let d=null; try{ d=JSON.parse(localStorage.getItem(SAVE_KEY)); }catch(e){}
+  if(!d||d.v!==1){ ticker('No saved game found — starting fresh.','#f5b842'); startGame(); return; }
+  clearWorld();
+  for(const f of floats)f.el.remove(); floats.length=0;
+  resetSplashDOM();
+  const nest={x:-320,z:100}, rival={x:320,z:-100};
+  placeBases(nest,rival,d.phase==='dormant');
+  G={ food:d.food, sand:d.sand, wood:d.wood, rocks:d.rocks, nest,
+    ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], cells:new Set(), patches:[],
+    queen:{x:nest.x,z:nest.z,hp:d.queen.hp,maxHp:d.queen.maxHp,layCd:d.queen.layCd},
+    rival:{x:rival.x,z:rival.z,hp:d.rival.hp,maxHp:d.rival.maxHp,level:d.rival.level,alive:d.rival.alive,respawn:d.rival.respawn},
+    phase:d.phase, raidTimer:d.raidTimer||0, raidWarn:!!d.raidWarn, raidActive:!!d.raidActive,
+    sel:[], buildMode:null, over:false, time:d.time||0, shake:0, _h:0, nurseHint:!!d.nurseHint, eggDest:d.eggDest||'nursery' };
+  if(!G.rival.alive){ rivalView.scale.y=0.14; const dm=new THREE.MeshStandardMaterial({color:0x111109,roughness:1}); rivalView.traverse(o=>{if(o.isMesh)o.material=dm;}); }
+  (d.builds||[]).forEach(reBuild);
+  (d.ants||[]).forEach(reAnt);
+  (d.enemies||[]).forEach(reEnemy);
+  (d.foods||[]).forEach(reFood);
+  (d.clutter||[]).forEach(reClutter);
+  (d.rockpiles||[]).forEach(reRock);
+  (d.eggs||[]).forEach(reEgg);
+  (d.hatch||[]).forEach(reHatch);
+  camCfg.yaw=0.6; camCfg.phi=0.92; camCfg.dist=190; camCfg.tx=nest.x; camCfg.tz=nest.z; _camDirty=true; placeCam();
+  const ban=document.getElementById('banner'); ban.classList.remove('war','peace'); ban.classList.add(G.phase==='war'?'war':'peace');
+  setBuild(null); ticker('Progress restored — welcome back!','#9be86a'); updateHUD();
 }
 
 function addAnt(role,ox,oz){
@@ -1366,6 +1461,14 @@ document.getElementById('splash-btn').onclick=()=>{
   sp.classList.add('hidden');
   setTimeout(()=>{document.body.classList.remove('splash-active');startGame();},500);
 };
+document.getElementById('splash-continue').onclick=()=>{
+  const sp=document.getElementById('splash');
+  destroyCinematic();
+  sp.classList.add('hidden');
+  setTimeout(()=>{document.body.classList.remove('splash-active');loadProgress();},500);
+};
+document.getElementById('save-btn').onclick=()=>{ if(G&&!G.over)saveProgress(false); };
+window.addEventListener('beforeunload',()=>{ if(G&&!G.over)saveProgress(true); });
 
 // ---------- HUD ----------
 function ticker(m,c){const el=document.getElementById('ticker');const b=document.createElement('b');b.textContent=m;el.textContent='';el.appendChild(b);el.style.color=c||'#9a7a50';}
@@ -1391,6 +1494,7 @@ function checkEnd(){ if(G.over)return;
   if(G.ants.filter(a=>a.alive).length<=0&&G.eggs.length<=0&&G.hatch.length<=0){G.over=true;over('Colony lost','No ants remain. Keep some safe at home next time.','#cc3322');}
 }
 function over(t,m,c){
+  clearSave(); updateContinueBtn();   // a lost colony can't be continued
   document.getElementById('splash-title').textContent=t;
   document.getElementById('splash-title').style.color=c||'#ffdd44';
   document.getElementById('splash-title').style.animation='none';
@@ -1428,6 +1532,7 @@ function loop(){
     try{sync(dt);}catch(e){console.error('sync',e);}
     try{tickParticles(dt);tickFloats(dt);}catch(e){console.error('fx',e);}
     G._h=(G._h||0)+dt; if(G._h>0.2){updateHUD();updateBanner();G._h=0;}
+    G._save=(G._save||0)+dt; if(G._save>5){saveProgress(true);G._save=0;}  // auto-save every ~5s
     checkEnd();
     // nest / queen hp label
     const qp=project(G.queen.x,20,G.queen.z);
@@ -1442,6 +1547,7 @@ function loop(){
 resize(); loop();
 document.body.classList.add('splash-active');
 startCinematic();
+updateContinueBtn();   // show "Continue" on the title screen if a save exists
 window.startGame=startGame;
 }
 </script>
