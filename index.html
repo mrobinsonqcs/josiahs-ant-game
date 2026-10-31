@@ -288,6 +288,21 @@ function buildSpider(){
   g.scale.setScalar(1.15);
   return {g,body,legs};
 }
+function buildBoss(){ // a giant armored beetle — the raid boss
+  const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
+  const shell=new THREE.MeshStandardMaterial({color:0x4a1626,roughness:.45,metalness:.35,emissive:0x2a0008,emissiveIntensity:.35});
+  const dark=new THREE.MeshStandardMaterial({color:0x1c0c12,roughness:.6});
+  const abd=new THREE.Mesh(G_,shell); abd.scale.set(7,5,9); abd.position.set(0,6,-3); abd.castShadow=true; body.add(abd);
+  const th=new THREE.Mesh(G_,shell); th.scale.set(5.5,4.5,5); th.position.set(0,5.5,4.5); th.castShadow=true; body.add(th);
+  const head=new THREE.Mesh(G_,dark); head.scale.set(4,3.4,4); head.position.set(0,5,9); head.castShadow=true; body.add(head);
+  for(const s of[-1,1]){ const horn=new THREE.Mesh(G_cone,dark); horn.scale.set(1.3,4.5,1.3); horn.position.set(s*1.8,6.6,11.5); horn.rotation.x=-0.5; horn.castShadow=true; body.add(horn); }
+  const mid=new THREE.Mesh(G_cone,dark); mid.scale.set(1.7,6.5,1.7); mid.position.set(0,6.2,12.5); mid.rotation.x=-0.75; mid.castShadow=true; body.add(mid);
+  body.add(sph(M.redeye,.85,.85,.85,-1.7,6,10.8)); body.add(sph(M.redeye,.85,.85,.85,1.7,6,10.8));
+  const legs=[];
+  for(let i=0;i<3;i++)for(const s of[-1,1]){ const p=new THREE.Group(); p.position.set(s*4,4.2,3-i*3.2);
+    const l=new THREE.Mesh(G_leg,dark); l.scale.set(2.3,3.4,2.3); l.position.set(s*2.8,-1.2,0); l.rotation.z=s*1.15; p.add(l); p.userData={ph:i*1.4,side:s}; body.add(p); legs.push(p); }
+  return {g,body,legs};
+}
 
 // ---------- buildings ----------
 function buildStruct(kind){
@@ -453,7 +468,7 @@ function tickFloats(dt){for(let i=floats.length-1;i>=0;i--){const f=floats[i];f.
 // ===================================================================
 let G=null, _foodCap=99999; const clock=new THREE.Clock();
 const nestMound=buildNestMound(); scene.add(nestMound);
-const rivalView=buildRival(); scene.add(rivalView);
+// rival colonies are now dynamic (G.rivals), each with its own view + danger zone
 
 // build grid overlay + placement ghost
 const gridHelper=new THREE.GridHelper(MAP, MAP/GRID, 0x8acb66, 0x3a5a30);
@@ -464,9 +479,6 @@ gridHelperRed.material.transparent=true; gridHelperRed.material.opacity=0.45; gr
 scene.add(gridHelperRed);
 const ghostTile=new THREE.Mesh(new THREE.PlaneGeometry(GRID*0.92,GRID*0.92), new THREE.MeshBasicMaterial({color:0x66ff66,transparent:true,opacity:0.4,side:THREE.DoubleSide}));
 ghostTile.rotation.x=-Math.PI/2; ghostTile.position.y=0.3; ghostTile.visible=false; scene.add(ghostTile);
-// rival danger zone (shown while dormant)
-const dangerZone=new THREE.Mesh(new THREE.CircleGeometry(RIVAL_TRIGGER,40), new THREE.MeshBasicMaterial({color:0xcc3322,transparent:true,opacity:0.12,side:THREE.DoubleSide}));
-dangerZone.rotation.x=-Math.PI/2; dangerZone.position.y=0.2; scene.add(dangerZone);
 // ---- dark overlay over not-yet-unlocked land (two planes covering the locked strips) ----
 const _lockMat=new THREE.MeshBasicMaterial({color:0x05060a,transparent:true,opacity:0.62,depthWrite:false,side:THREE.DoubleSide});
 function mkLockPlane(){const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),_lockMat);m.rotation.x=-Math.PI/2;m.position.y=0.6;m.renderOrder=1;scene.add(m);return m;}
@@ -779,7 +791,8 @@ function destroyCinematic(){if(_cineCleanup){_cineCleanup();_cineCleanup=null;}}
 function clearWorld(){
   if(!G)return;
   for(const a of G.ants){disposeGroup(a.view.g);scene.remove(a.view.g);}
-  for(const e of G.enemies){disposeGroup(e.view.g);scene.remove(e.view.g);}
+  for(const e of G.enemies){if(e.labelEl)e.labelEl.remove();disposeGroup(e.view.g);scene.remove(e.view.g);}
+  if(G.rivals)for(const r of G.rivals){disposeGroup(r.view);scene.remove(r.view);if(r.dzone){scene.remove(r.dzone);r.dzone.geometry.dispose();r.dzone.material.dispose();}}
   for(const b of G.builds){if(b.labelEl)b.labelEl.remove();disposeGroup(b.view.g);scene.remove(b.view.g);}
   for(const f of G.foods){disposeGroup(f.view.g);scene.remove(f.view.g);}
   for(const c of G.clutter){disposeGroup(c.view.g);scene.remove(c.view.g);}
@@ -802,30 +815,23 @@ function resetSplashDOM(){
   document.getElementById('splash-msg').textContent='';
   document.getElementById('splash-btn').textContent='Play';
 }
-// place the fixed nest + rival structures and their danger zone
-function placeBases(nest,rival,dormant){
-  nestMound.position.set(nest.x,0,nest.z);
-  rivalView.scale.set(1,1,1);
-  rivalView.traverse(o=>{if(o.isMesh&&o.userData.origMat)o.material=o.userData.origMat;});
-  rivalView.position.set(rival.x,0,rival.z);
-  dangerZone.position.set(rival.x,0.2,rival.z); dangerZone.visible=dormant;
-}
+function placeBases(nest){ nestMound.position.set(nest.x,0,nest.z); }
 function startGame(){
   // clear
   clearWorld();
   for(const f of floats)f.el.remove(); floats.length=0;
   resetSplashDOM();
 
-  const nest={x:-640,z:640}, rival={x:640,z:-640};
-  placeBases(nest,rival,true);
+  const nest={x:-640,z:640};
+  placeBases(nest);
 
-  G={ food:15, sand:0, wood:0, rocks:0, region:0, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], critters:[], spiders:[], cells:new Set(), patches:[],
+  G={ food:15, sand:0, wood:0, rocks:0, region:0, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], critters:[], spiders:[], rivals:[], cells:new Set(), patches:[],
     queen:{x:nest.x,z:nest.z,hp:160,maxHp:160,layCd:5},
-    rival:{x:rival.x,z:rival.z,hp:120,maxHp:120,level:1,alive:true,respawn:0},
-    phase:'dormant', raidTimer:0, raidWarn:false, raidActive:false,
+    phase:'dormant', raidActive:false, bossTimer:70, bossWarn:false,
     sel:[], buildMode:null, over:false, time:0, shake:0, _h:0, nurseHint:false, eggDest:'nursery' };
   for(let i=0;i<5;i++) addAnt('ant');
   addAnt('soldier'); addAnt('soldier');
+  createDefaultRivals();          // rival colonies dotted across the far regions
   spawnRegionContent(0);          // fill the starting clearing with food / brush / rocks
   updateLockedOverlay();
 
@@ -872,12 +878,12 @@ const SAVE_KEY='antwarz_save_v1';
 function serialize(){
   return { v:1,
     food:G.food, sand:G.sand, wood:G.wood, rocks:G.rocks, region:G.region, time:G.time,
-    phase:G.phase, raidTimer:G.raidTimer, raidWarn:G.raidWarn, raidActive:G.raidActive,
+    phase:G.phase, raidActive:G.raidActive, bossTimer:G.bossTimer, bossWarn:G.bossWarn,
     eggDest:G.eggDest, nurseHint:G.nurseHint,
     queen:{hp:G.queen.hp,maxHp:G.queen.maxHp,layCd:G.queen.layCd},
-    rival:{hp:G.rival.hp,maxHp:G.rival.maxHp,level:G.rival.level,alive:G.rival.alive,respawn:G.rival.respawn},
+    rivals:G.rivals.map(r=>({x:r.x,z:r.z,hp:r.hp,maxHp:r.maxHp,level:r.level,alive:r.alive,respawn:r.respawn,awake:r.awake,baseLvl:r.baseLvl})),
     ants:G.ants.filter(a=>a.alive).map(a=>({role:a.role,x:a.x,z:a.z,hp:a.hp,maxHp:a.maxHp,carryFood:a.carryFood||0,carryRocks:a.carryRocks||0})),
-    enemies:G.enemies.filter(e=>e.alive).map(e=>({x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,speed:e.speed,atk:e.atk})),
+    enemies:G.enemies.filter(e=>e.alive).map(e=>({x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,speed:e.speed,atk:e.atk,boss:!!e.boss})),
     builds:G.builds.map(b=>({kind:b.kind,gx:b.gx,gz:b.gz,built:b.built,prog:b.prog||0,hp:b.hp})),
     foods:G.foods.filter(f=>f.amount>0).map(f=>({x:f.x,z:f.z,amount:f.amount})),
     clutter:G.clutter.filter(c=>!c.removed).map(c=>({x:c.x,z:c.z,type:c.type})),
@@ -900,7 +906,8 @@ function reAnt(d){ const v=buildAnt(d.role); v.g.position.set(d.x,0,d.z); scene.
   G.ants.push({x:d.x,z:d.z,role:d.role,alive:true,hp:d.hp,maxHp:d.maxHp,speed:d.role==='soldier'?34:28,
     heading:0,wob:rnd(0,7),flash:0,atkCd:0,carryFood:d.carryFood||0,carryRocks:d.carryRocks||0,
     carryEgg:null,order:null,hold:{x:d.x,z:d.z},sentryTarget:null,sentryPause:0,view:v}); }
-function reEnemy(d){ const v=buildEnemy(); v.g.position.set(d.x,0,d.z); scene.add(v.g);
+function reEnemy(d){ if(d.boss){ addBoss(d.x,d.z,1); const e=G.enemies[G.enemies.length-1]; e.hp=d.hp; e.maxHp=d.maxHp; e.speed=d.speed; e.atk=d.atk; return; }
+  const v=buildEnemy(); v.g.position.set(d.x,0,d.z); scene.add(v.g);
   G.enemies.push({x:d.x,z:d.z,hp:d.hp,maxHp:d.maxHp,speed:d.speed,atk:d.atk,alive:true,heading:0,wob:rnd(0,7),flash:0,atkCd:0,view:v}); }
 function reBuild(d){ const v=buildStruct(d.kind); v.g.position.set(d.gx,0,d.gz); scene.add(v.g);
   const b={kind:d.kind,x:d.gx,z:d.gz,gx:d.gx,gz:d.gz,built:d.built,prog:d.prog||0,hp:d.hp,view:v};
@@ -926,15 +933,18 @@ function loadProgress(){
   clearWorld();
   for(const f of floats)f.el.remove(); floats.length=0;
   resetSplashDOM();
-  const nest={x:-640,z:640}, rival={x:640,z:-640};
-  placeBases(nest,rival,d.phase==='dormant');
+  const nest={x:-640,z:640};
+  placeBases(nest);
   G={ food:d.food, sand:d.sand, wood:d.wood, rocks:d.rocks, region:d.region||0, nest,
-    ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], critters:[], spiders:[], cells:new Set(), patches:[],
+    ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], critters:[], spiders:[], rivals:[], cells:new Set(), patches:[],
     queen:{x:nest.x,z:nest.z,hp:d.queen.hp,maxHp:d.queen.maxHp,layCd:d.queen.layCd},
-    rival:{x:rival.x,z:rival.z,hp:d.rival.hp,maxHp:d.rival.maxHp,level:d.rival.level,alive:d.rival.alive,respawn:d.rival.respawn},
-    phase:d.phase, raidTimer:d.raidTimer||0, raidWarn:!!d.raidWarn, raidActive:!!d.raidActive,
+    phase:d.phase, raidActive:!!d.raidActive, bossTimer:d.bossTimer!=null?d.bossTimer:70, bossWarn:!!d.bossWarn,
     sel:[], buildMode:null, over:false, time:d.time||0, shake:0, _h:0, nurseHint:!!d.nurseHint, eggDest:d.eggDest||'nursery' };
-  if(!G.rival.alive){ rivalView.scale.y=0.14; const dm=new THREE.MeshStandardMaterial({color:0x111109,roughness:1}); rivalView.traverse(o=>{if(o.isMesh)o.material=dm;}); }
+  if(d.rivals){ for(const rd of d.rivals){ addRival(rd.x,rd.z,rd.baseLvl||1); const r=G.rivals[G.rivals.length-1];
+      r.hp=rd.hp; r.maxHp=rd.maxHp; r.level=rd.level; r.alive=rd.alive; r.respawn=rd.respawn||0; r.awake=!!rd.awake;
+      if(!r.alive){ r.view.scale.y=0.14; const dm=new THREE.MeshStandardMaterial({color:0x111109,roughness:1}); r.view.traverse(o=>{if(o.isMesh)o.material=dm;}); r.dzone.visible=false; }
+      else if(r.awake){ r.dzone.visible=false; } } }
+  else createDefaultRivals();
   (d.builds||[]).forEach(reBuild);
   (d.ants||[]).forEach(reAnt);
   (d.enemies||[]).forEach(reEnemy);
@@ -968,17 +978,32 @@ function addAnt(role,ox,oz){
     speed:role==='soldier'?34:28,heading:0,wob:rnd(0,7),flash:0,atkCd:0,
     carryFood:0,carryRocks:0,carryEgg:null,order:null,hold,sentryTarget:null,sentryPause:0,view:v});
 }
-function addEnemy(){const v=buildEnemy();const r=G.rival;v.g.position.set(r.x+rnd(-8,8),0,r.z+rnd(-8,8));
+function spawnRaider(r){const v=buildEnemy();v.g.position.set(r.x+rnd(-8,8),0,r.z+rnd(-8,8));
   scene.add(v.g);
   const lv=r.level;G.enemies.push({x:v.g.position.x,z:v.g.position.z,hp:30+lv*10,maxHp:30+lv*10,speed:20+lv*1.5,atk:7+lv*2,
     alive:true,heading:0,wob:rnd(0,7),flash:0,atkCd:0,view:v});}
+function addRival(x,z,baseLvl){
+  const v=buildRival(); v.position.set(x,0,z); scene.add(v);
+  const dz=new THREE.Mesh(new THREE.CircleGeometry(RIVAL_TRIGGER,36),new THREE.MeshBasicMaterial({color:0xcc3322,transparent:true,opacity:0.12,side:THREE.DoubleSide}));
+  dz.rotation.x=-Math.PI/2; dz.position.set(x,0.2,z); scene.add(dz);
+  const hp=120+baseLvl*45;
+  G.rivals.push({x,z,hp,maxHp:hp,level:baseLvl,alive:true,respawn:0,awake:false,raidTimer:0,raidWarn:false,baseLvl,view:v,dzone:dz});
+}
+function createDefaultRivals(){ addRival(440,80,1); addRival(720,-360,2); addRival(640,-640,3); }
+function addBoss(x,z,lvl){
+  const v=buildBoss(); v.g.position.set(x,0,z); scene.add(v.g);
+  const hp=260+lvl*110;
+  const lel=document.createElement('div'); lel.className='float'; lel.style.fontSize='.7rem'; lel.style.pointerEvents='none'; labels.appendChild(lel);
+  G.enemies.push({x,z,hp,maxHp:hp,speed:13,atk:16+lvl*4,boss:true,alive:true,heading:0,wob:rnd(0,7),flash:0,atkCd:0,view:v,labelEl:lel});
+}
+function nearAnyRival(x,z,pad){ for(const r of G.rivals){ if(d2(x,z,r.x,r.z)<RIVAL_TRIGGER+pad) return true; } return false; }
 function addCritter(x,z){ const v=buildCritter(); v.g.position.set(x,0,z); scene.add(v.g);
   G.critters.push({x,z,alive:true,heading:rnd(0,7),hv:0,wob:rnd(0,7),spd:rnd(7,11),tx:x,tz:z,pause:rnd(0,1.5),view:v}); }
 function addSpider(x,z){ const v=buildSpider(); v.g.position.set(x,0,z); scene.add(v.g);
   G.spiders.push({x,z,hp:42,maxHp:42,alive:true,heading:rnd(0,7),hv:0,wob:rnd(0,7),spd:24,atk:10,atkCd:0,flash:0,tx:x,tz:z,pause:rnd(0,1.5),view:v}); }
-function addFood(x,z){ if(G&&d2(x,z,G.rival.x,G.rival.z)<RIVAL_TRIGGER+50)return; const v=buildFood();v.g.position.set(x,0,z);scene.add(v.g);G.foods.push({x,z,amount:rndI(20,40),view:v});}
-function addRockPile(x,z){ if(G&&d2(x,z,G.rival.x,G.rival.z)<RIVAL_TRIGGER+50)return; if(G&&d2(x,z,G.nest.x,G.nest.z)<40)return; const v=buildRockPile();v.g.position.set(x,0,z);scene.add(v.g);G.rockpiles.push({x,z,amount:rndI(18,32),view:v});}
-function addClutter(x,z){if(d2(x,z,G.nest.x,G.nest.z)<34)return; if(G&&d2(x,z,G.rival.x,G.rival.z)<RIVAL_TRIGGER+40)return; const v=buildClutter();v.g.position.set(x,0,z);scene.add(v.g);G.clutter.push({x,z,type:v.type,view:v});}
+function addFood(x,z){ if(G&&nearAnyRival(x,z,50))return; const v=buildFood();v.g.position.set(x,0,z);scene.add(v.g);G.foods.push({x,z,amount:rndI(20,40),view:v});}
+function addRockPile(x,z){ if(G&&nearAnyRival(x,z,50))return; if(G&&d2(x,z,G.nest.x,G.nest.z)<40)return; const v=buildRockPile();v.g.position.set(x,0,z);scene.add(v.g);G.rockpiles.push({x,z,amount:rndI(18,32),view:v});}
+function addClutter(x,z){if(d2(x,z,G.nest.x,G.nest.z)<34)return; if(G&&nearAnyRival(x,z,40))return; const v=buildClutter();v.g.position.set(x,0,z);scene.add(v.g);G.clutter.push({x,z,type:v.type,view:v});}
 function layEgg(){const v=buildEggMesh();const n=G.nest;const x=n.x+rnd(-6,6),z=n.z+rnd(-6,6);v.position.set(x,12,z);scene.add(v);
   const lel=document.createElement('div');lel.className='float';lel.style.fontSize='.65rem';lel.style.pointerEvents='none';labels.appendChild(lel);
   G.eggs.push({x,z,y:12,dest:G.eggDest||'nursery',carrier:null,claimed:null,mesh:v,labelEl:lel});burst(n.x,n.z,0xf5b842,5,18,12);}
@@ -1099,7 +1124,7 @@ function autoSoldier(a,dt){
   for(const _s of G.spiders){if(!_s.alive)continue;const _ed=d2(a.x,a.z,_s.x,_s.z);if(_ed<_ebd){_ebd=_ed;e=_s;}}
   const near=e&&(_ebd<120 || d2(e.x,e.z,G.nest.x,G.nest.z)<150);
   if(near){ a.sentryTarget=null; doAttack(a,e,dt); return; }
-  if(G.raidActive&&G.rival.alive){ a.sentryTarget=null; doRaid(a,dt); return; }
+  if(G.raidActive&&G.rivals.some(r=>r.alive)){ a.sentryTarget=null; doRaid(a,dt); return; }
   // sentry: walk to random nearby point, pause, repeat
   const hx=a.hold?a.hold.x:G.nest.x, hz=a.hold?a.hold.z:G.nest.z;
   if(a.sentryPause>0){ a.sentryPause-=dt; return; }
@@ -1118,9 +1143,11 @@ function doAttack(a,e,dt){
     if(e.hp<=0){ e.alive=false; burst(e.x,e.z,0xcc3322,12); floatText(e.x,6,e.z,'down!','#f5b842'); if(a.order&&a.order.type==='attack')a.order=null; } }
 }
 function doRaid(a,dt){
-  const r=G.rival; if(!r.alive){a.order=null;return;}
+  let r=null,bd=1e9; for(const _r of G.rivals){ if(!_r.alive)continue; const d=d2(a.x,a.z,_r.x,_r.z); if(d<bd){bd=d;r=_r;} }
+  if(!r){a.order=null;return;}
+  wakeRival(r);
   if(moveTo(a,r.x,r.z,a.speed,dt,16)){}
-  if(d2(a.x,a.z,r.x,r.z)<20&&a.atkCd<=0){ r.hp-=rndI(6,12); a.atkCd=.5; burst(r.x,r.z,0xf5b842,4); G.shake=Math.min(2,(G.shake||0)+.2); if(r.hp<=0)crushRival(); }
+  if(d2(a.x,a.z,r.x,r.z)<20&&a.atkCd<=0){ r.hp-=rndI(6,12); a.atkCd=.5; burst(r.x,r.z,0xf5b842,4); G.shake=Math.min(2,(G.shake||0)+.2); if(r.hp<=0)crushRival(r); }
 }
 function idle(a,dt){
   const n=G.nest;
@@ -1151,7 +1178,12 @@ function tickEnemies(dt){
     else moveTo(e,q.x,q.z,e.speed,dt,8);
     clampTerr(e);
   }
-  G.enemies=G.enemies.filter(e=>{if(!e.alive){scene.remove(e.view.g);return false;}return true;});
+  G.enemies=G.enemies.filter(e=>{ if(!e.alive){ scene.remove(e.view.g);
+    if(e.boss){ disposeGroup(e.view.g); if(e.labelEl)e.labelEl.remove();
+      burst(e.x,e.z,0xffd24a,40,60,10); for(let i=0;i<6;i++)burst(e.x+rnd(-22,22),e.z+rnd(-22,22),0xff6a3a,10,40,rnd(2,14));
+      G.food=Math.min(_foodCap,G.food+30); G.sand+=20; G.wood+=15; G.rocks+=10;
+      floatText(e.x,12,e.z,'🏆 BOSS DOWN!','#ffd24a'); ticker('🏆 Boss defeated! Huge loot for the colony (+food, sand, wood, rocks).','#ffd24a'); G.shake=Math.min(4,(G.shake||0)+2); }
+    return false; } return true; });
 }
 
 // ---------- wildlife ----------
@@ -1321,30 +1353,45 @@ function tickColony(dt){
   if(G.spiders.length<wantSpiders && Math.random()<dt*(isNight()?0.35:0.15)){const p=randTerrPoint();if(d2(p.x,p.z,G.nest.x,G.nest.z)>190)addSpider(p.x,p.z);}
 }
 
-// ---------- phase / rival ----------
-function tickPhase(dt){
-  if(G.phase==='dormant'){
-    // wake the rival once any ant crosses into its territory (or you order a raid)
-    let intruder=false;
-    for(const a of G.ants){ if(a.alive && d2(a.x,a.z,G.rival.x,G.rival.z)<RIVAL_TRIGGER){ intruder=true; break; } }
-    if(intruder || G.raidActive) startWar();
-    return;
+// ---------- rival colonies ----------
+function goToWar(){ if(G.phase==='war')return; G.phase='war'; const b=document.getElementById('banner'); b.classList.remove('peace'); b.classList.add('war'); }
+function wakeRival(r){ if(r.awake||!r.alive)return; r.awake=true; r.raidTimer=5; r.dzone.visible=false; goToWar(); ticker('You disturbed a rival colony — defend the queen!','#f0a890'); }
+function reviveRival(r){ r.alive=true; r.level++; r.maxHp=120+r.level*45; r.hp=r.maxHp; r.awake=true; r.raidTimer=Math.max(8,22-r.level*1.5);
+  r.view.scale.set(1,1,1); r.view.traverse(o=>{if(o.isMesh&&o.userData.origMat)o.material=o.userData.origMat;});
+  burst(r.x,r.z,0xcc3322,16,40,8); ticker('A rival colony has rebuilt, stronger (Lv '+r.level+').','#f0a890'); }
+function crushRival(r){ r.alive=false; r.respawn=20; r.awake=false;
+  burst(r.x,r.z,0xf5b842,30,50,10); for(let i=0;i<5;i++) burst(r.x+rnd(-18,18),r.z+rnd(-18,18),0xcc3322,10,40,rnd(2,16));
+  r.view.scale.y=0.14; const deadMat=new THREE.MeshStandardMaterial({color:0x111109,roughness:1}); r.view.traverse(o=>{if(o.isMesh)o.material=deadMat;});
+  r.dzone.visible=false;
+  G.food=Math.min(_foodCap,G.food+20); G.sand+=15;
+  if(!G.rivals.some(x=>x.alive)){ G.raidActive=false; for(const a of G.ants)if(a.order&&a.order.type==='raid')a.order=null; }
+  ticker('💥 Rival colony destroyed! +20 food, +15 sand. It will rebuild stronger.','#7bc455'); }
+function tickRivals(dt){
+  for(const r of G.rivals){
+    if(!r.alive){ r.respawn-=dt; if(r.respawn<=0) reviveRival(r); continue; }
+    if(!r.awake){
+      r.dzone.visible=true; r.dzone.material.opacity=0.1+Math.sin(G.time*2)*0.04;
+      for(const a of G.ants){ if(a.alive && d2(a.x,a.z,r.x,r.z)<RIVAL_TRIGGER){ wakeRival(r); break; } }
+      continue;
+    }
+    r.raidTimer-=dt; const interval=Math.max(8,22-r.level*1.5);
+    if(r.raidTimer<=3 && !r.raidWarn){ r.raidWarn=true; ticker('Rival raiders approaching!','#e06050'); }
+    if(r.raidTimer<=0){ const n=1+Math.floor(r.level*0.8+Math.random()*1.5); for(let i=0;i<n;i++)setTimeout(()=>{if(G&&!G.over&&r.alive)spawnRaider(r);},i*300); r.raidTimer=interval; r.raidWarn=false; }
   }
-  const r=G.rival;
-  if(!r.alive){ r.respawn-=dt; if(r.respawn<=0){ r.alive=true; r.level++; r.maxHp=120+r.level*45; r.hp=r.maxHp; G.raidActive=false; dangerZone.visible=false; ticker('A stronger rival colony rises (Lv '+r.level+').','#f0a890'); } return; }
-  G.raidTimer-=dt; const interval=Math.max(9,24-r.level*1.5);
-  if(G.raidTimer<=3&&!G.raidWarn){G.raidWarn=true;ticker('Rival raiders approaching!','#e06050');}
-  if(G.raidTimer<=0){ const n=1+Math.floor(r.level*0.9+Math.random()*1.5); for(let i=0;i<n;i++)setTimeout(()=>{if(G&&!G.over&&G.rival.alive)addEnemy();},i*350); G.raidTimer=interval;G.raidWarn=false; ticker('Raid: '+n+' bug(s) incoming!','#cc3322'); }
 }
-function startWar(){ if(G.phase==='war')return; G.phase='war';G.raidTimer=6; dangerZone.visible=false; const b=document.getElementById('banner');b.classList.remove('peace');b.classList.add('war'); ticker('You woke the rival colony! Defend the queen.','#f0a890'); }
-function crushRival(){ const r=G.rival;r.alive=false;r.respawn=18;G.raidActive=false;
-  burst(r.x,r.z,0xf5b842,30,50,10);
-  for(let i=0;i<5;i++) burst(r.x+rnd(-18,18),r.z+rnd(-18,18),0xcc3322,10,40,rnd(2,16));
-  rivalView.scale.y=0.14;
-  const deadMat=new THREE.MeshStandardMaterial({color:0x111109,roughness:1});
-  rivalView.traverse(o=>{if(o.isMesh)o.material=deadMat;});
-  for(const a of G.ants)if(a.order&&a.order.type==='raid')a.order=null;
-  ticker('Rival nest destroyed! They will rebuild stronger. Keep growing!','#7bc455'); }
+// ---------- bosses (giant beetle raids once the colony has expanded) ----------
+function tickBosses(dt){
+  if(G.region<2)return;
+  if(G.enemies.some(e=>e.boss&&e.alive)){ if(G.bossTimer<60)G.bossTimer=60; return; }
+  G.bossTimer-=dt;
+  if(G.bossTimer<=8 && !G.bossWarn){ G.bossWarn=true; ticker('⚠️ The ground trembles — a huge beast is coming! Ready your catapults and soldiers.','#ff6a3a'); }
+  if(G.bossTimer<=0){
+    const lvl=Math.max(1,G.region-1);
+    const x=clamp(frontierX(G.region)-50,WMIN+50,WMAX-50), z=clamp(frontierZ(G.region)+50,WMIN+50,WMAX-50);
+    addBoss(x,z,lvl); G.bossTimer=110; G.bossWarn=false; goToWar();
+    ticker('🐞 A BOSS has entered the world! Rally everyone to defend the queen!','#ff3b30'); G.shake=Math.min(4,(G.shake||0)+2);
+  }
+}
 
 // ---------- build placement ----------
 function finishBuild(b){ burst(b.x,b.z,0xf5b842,10); ticker(b.kind+' complete!','#7bc455');
@@ -1355,7 +1402,7 @@ function finishBuild(b){ burst(b.x,b.z,0xf5b842,10); ticker(b.kind+' complete!',
 function cellValid(gx,gz){
   if(G.cells.has(cellKey(gx,gz))) return false;
   if(d2(gx,gz,G.nest.x,G.nest.z)<GRID*1.4) return false;
-  if(d2(gx,gz,G.rival.x,G.rival.z)<GRID*1.6) return false;
+  for(const r of G.rivals){ if(d2(gx,gz,r.x,r.z)<GRID*1.6) return false; }
   if(!inTerritory(gx,gz)) return false;
   return true;
 }
@@ -1439,8 +1486,10 @@ function sync(dt){
   }
   // gentle terrain sway (grass + tree canopies)
   for(const c of G.clutter){ if(c.removed)continue; c.view.g.rotation.z=Math.sin(G.time*1.3+c.x*0.1)*0.04; }
-  // danger zone gentle pulse while dormant
-  if(G.phase==='dormant'){ dangerZone.material.opacity=0.1+Math.sin(G.time*2)*0.04; }
+  // boss HP bars float above each boss
+  for(const e of G.enemies){ if(!e.boss||!e.labelEl)continue; const p=project(e.x,24,e.z);
+    if(p.front){ e.labelEl.style.display='block'; e.labelEl.style.left=p.x+'px'; e.labelEl.style.top=p.y+'px'; e.labelEl.textContent='🐞 '+Math.max(0,Math.ceil(e.hp))+'/'+e.maxHp; e.labelEl.style.color='#ff6a3a'; }
+    else e.labelEl.style.display='none'; }
   // food scale by amount
   for(const f of G.foods){ const k=clamp(f.amount/40,0.25,1); f.view.g.scale.setScalar(0.5+k*0.7); }
   // rock piles shrink as they are mined
@@ -1466,7 +1515,7 @@ function pickList(){
   for(const r of G.rockpiles)arr.push(r.view.hit);
   for(const c of G.clutter)if(!c.removed)arr.push(c.view.hit);
   for(const b of G.builds)if(b.view.pick)arr.push(b.view.pick);
-  arr.push(...rivalView.children.filter(o=>o.isMesh));
+  for(const r of G.rivals)if(r.alive)r.view.traverse(o=>{if(o.isMesh)arr.push(o);});
   return arr;
 }
 function tagRefs(){
@@ -1478,7 +1527,7 @@ function tagRefs(){
   for(const r of G.rockpiles){r.view.hit.userData={kind:'rock',ref:r};}
   for(const c of G.clutter)if(!c.removed){c.view.hit.userData={kind:'clutter',ref:c};}
   for(const b of G.builds)if(b.view.pick){b.view.pick.userData={kind:'build',ref:b};}
-  rivalView.children.forEach(o=>{if(o.isMesh)o.userData.kind='rival';});
+  for(const r of G.rivals)if(r.alive)r.view.traverse(o=>{if(o.isMesh)o.userData={kind:'rival',ref:r};});
 }
 function rayAt(px,py){const r=stage.getBoundingClientRect();ndc.set(((px-r.left)/r.width)*2-1,-((py-r.top)/r.height)*2+1);ray.setFromCamera(ndc,camera);}
 function groundPoint(px,py){rayAt(px,py);const hit=ray.intersectObject(ground)[0];return hit?hit.point:null;}
@@ -1551,10 +1600,8 @@ function autoDispatch(ud,point){
   else if(ud.kind==='critter'){const a=nearestFreeAnt(ud.ref.x,ud.ref.z,'worker');if(a){a.order={type:'catch',c:ud.ref};ticker('Ant sent to catch a bug for food.','#9ad84c');}else ticker('No free workers.','#9a7a50');}
   else if(ud.kind==='spider'){const a=nearestFreeAnt(ud.ref.x,ud.ref.z,'soldier');if(a){a.order={type:'attack',e:ud.ref};ticker('Soldier sent to fight the spider!','#c87ad0');}else ticker('No free soldiers.','#9a7a50');}
   else if(ud.kind==='build'&&!ud.ref.built){const b=ud.ref;const a=nearestFreeAnt(b.x,b.z,'worker');if(a){a.order={type:'build',b};ticker('Ant sent to build.','#7bc455');}}
-  else if(ud.kind==='rival'){if(G.rival.alive){const a=nearestFreeAnt(G.rival.x,G.rival.z,'soldier');if(a){G.raidActive=true;a.order={type:'raid'};ticker('Soldier sent to raid!','#f0a890');}else ticker('No free soldiers.','#9a7a50');}}
-  else{const isRival=point&&d2(point.x,point.z,G.rival.x,G.rival.z)<26&&G.rival.alive;
-    if(isRival){const a=nearestFreeAnt(G.rival.x,G.rival.z,'soldier');if(a){G.raidActive=true;a.order={type:'raid'};ticker('Soldier sent to raid!','#f0a890');}else ticker('No free soldiers.','#9a7a50');}
-    else if(point){const a=nearestFreeAnt(point.x,point.z,null);if(a){a.order={type:'move',x:point.x,z:point.z};burst(point.x,point.z,0x9be86a,5,10,2);}}}
+  else if(ud.kind==='rival'){const r=ud.ref;if(r.alive){const a=nearestFreeAnt(r.x,r.z,'soldier');if(a){G.raidActive=true;wakeRival(r);a.order={type:'raid'};ticker('Soldier sent to raid the rival colony!','#f0a890');}else ticker('No free soldiers.','#9a7a50');}}
+  else{if(point){const a=nearestFreeAnt(point.x,point.z,null);if(a){a.order={type:'move',x:point.x,z:point.z};burst(point.x,point.z,0x9be86a,5,10,2);}}}
 }
 function handleTap(px,py){
   if(G.buildMode==='demolish'){
@@ -1601,10 +1648,8 @@ function handleTap(px,py){
     else if(ud.kind==='enemy'){for(const a of G.sel)if(a.role==='soldier')a.order={type:'attack',e:ud.ref};ticker('Attacking!','#f0a890');}
     else if(ud.kind==='critter'){for(const a of G.sel)if(a.role!=='soldier')a.order={type:'catch',c:ud.ref};ticker('Catching bugs for food!','#9ad84c');}
     else if(ud.kind==='spider'){for(const a of G.sel)if(a.role==='soldier')a.order={type:'attack',e:ud.ref};ticker('Soldiers on the spider!','#c87ad0');}
-    else if(ud.kind==='rival'){if(G.rival.alive){G.raidActive=true;for(const a of G.sel)if(a.role==='soldier')a.order={type:'raid'};ticker('Raid! Soldiers march on the rival.','#f0a890');}}
-    else{const isRival=point&&d2(point.x,point.z,G.rival.x,G.rival.z)<26&&G.rival.alive;
-      if(isRival){G.raidActive=true;for(const a of G.sel)if(a.role==='soldier')a.order={type:'raid'};ticker('Raid! Soldiers march on the rival.','#f0a890');}
-      else if(point){for(const a of G.sel)a.order={type:'move',x:point.x,z:point.z};burst(point.x,point.z,0x9be86a,5,10,2);}}
+    else if(ud.kind==='rival'){if(ud.ref.alive){G.raidActive=true;wakeRival(ud.ref);for(const a of G.sel)if(a.role==='soldier')a.order={type:'raid'};ticker('Raid! Soldiers march on the rival colony.','#f0a890');}}
+    else{if(point){for(const a of G.sel)a.order={type:'move',x:point.x,z:point.z};burst(point.x,point.z,0x9be86a,5,10,2);}}
     return;
   }
   autoDispatch(ud,point);
@@ -1655,14 +1700,17 @@ function updateHUD(){ if(!G)return;
   document.getElementById('r-ants').textContent=ants+'/'+antCap();
   document.getElementById('r-sol').textContent=sol+'/'+soldierCap();
   document.querySelectorAll('#builds .b[data-build]').forEach(b=>{const k=b.dataset.build;if(COST[k]!==undefined||WOODCOST[k]!==undefined)b.disabled=!canAfford(k);});
-  document.getElementById('rf').style.width=(G.rival.alive?G.rival.hp/G.rival.maxHp*100:0)+'%';
-  document.getElementById('rlv').textContent='Lv '+G.rival.level;
+  const aliveR=G.rivals.filter(r=>r.alive);
+  if(aliveR.length){ const r=aliveR.reduce((a,b)=>(a.awake!==b.awake)?(a.awake?a:b):(a.hp<b.hp?a:b));
+    document.getElementById('rf').style.width=(r.hp/r.maxHp*100)+'%';
+    document.getElementById('rlv').textContent='Lv '+r.level+(aliveR.length>1?' ·'+aliveR.length+'×':''); }
+  else { document.getElementById('rf').style.width='0%'; document.getElementById('rlv').textContent='—'; }
   const mml=document.getElementById('mmlabel');
   if(mml) mml.textContent = G.region>=maxRegion() ? 'Whole world open' : 'Next land: '+REGION_ANTS[G.region+1]+' ants';
 }
 function updateBanner(){ if(!G)return;
-  if(G.phase==='dormant'){document.getElementById('btext').textContent='Peaceful build-up — rival dormant';}
-  else{document.getElementById('btext').textContent=G.raidActive?'Raiding the rival':'Defend the colony';}
+  if(G.phase==='dormant'){document.getElementById('btext').textContent='Peaceful build-up — rivals dormant';}
+  else{document.getElementById('btext').textContent=G.raidActive?'Raiding a rival colony':'Defend the colony';}
   document.getElementById('btime').textContent=isNight()?'🌙 Night':'☀️ Day';
 }
 function checkEnd(){ if(G.over)return;
@@ -1709,9 +1757,9 @@ function drawMinimap(dt){
   for(const a of G.ants){ if(a.alive) dot(a.x,a.z,a.role==='soldier'?'#ff9a3a':'#cfe9b0',1.1); }
   for(const df of G.dragonflies) dot(df.x,df.z,'#8fe0d0',1.4);
   for(const s of G.spiders){ if(s.alive) dot(s.x,s.z,'#c850e0',1.6); }
-  for(const e of G.enemies){ if(e.alive) dot(e.x,e.z,'#ff3b30',1.6); }
+  for(const e of G.enemies){ if(e.alive) dot(e.x,e.z,e.boss?'#ff8a00':'#ff3b30',e.boss?3.2:1.6); }
+  for(const r of G.rivals){ if(r.alive) dot(r.x,r.z,r.awake?'#ff2010':'#cc3322',3); }
   dot(G.nest.x,G.nest.z,'#ffd24a',3);
-  if(G.rival.alive) dot(G.rival.x,G.rival.z,'#cc3322',3);
   mmCtx.strokeStyle='rgba(255,255,255,.55)'; mmCtx.strokeRect(mx(camCfg.tx)-5,mz(camCfg.tz)-5,10,10);
 }
 
@@ -1724,7 +1772,8 @@ function loop(){
   if(G&&!G.over){
     _foodCap=99999+G.builds.filter(b=>b.kind==='store'&&b.built).length*40;
     G.time+=dt; keyPan(dt);
-    try{tickPhase(dt);}catch(e){console.error('phase',e);}
+    try{tickRivals(dt);}catch(e){console.error('rivals',e);}
+    try{tickBosses(dt);}catch(e){console.error('bosses',e);}
     try{tickColony(dt);}catch(e){console.error('colony',e);}
     try{tickAnts(dt);}catch(e){console.error('ants',e);}
     try{tickEnemies(dt);}catch(e){console.error('enemies',e);}
