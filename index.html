@@ -190,8 +190,8 @@ body.splash-active #hud{visibility:hidden}
   <h3>⚠️ Dangers</h3>
   <ul>
     <li>🕷️ <b>Spiders</b> roam the wild and hunt your ants — more appear at <b>night</b>. Soldiers can fight them off.</li>
-    <li>🔴 <b>Rival colonies</b> wake up when your ants get close, then send raiders after your Queen.</li>
-    <li>🐞 <b>Boss</b> — a giant beetle storms in once you've expanded. Throw everything at it!</li>
+    <li>🔴 <b>Rival colonies</b> wake up when your ants get close, then send raiders after your Queen — beetle-ants, fast <b>wasps</b> that fly right over your walls, and tanky <b>worms</b> that burrow underground (you can't hit them until they surface).</li>
+    <li>🐞 <b>Bosses</b> — a giant beetle or a flying <b>wasp queen</b> storms in once you've expanded. Throw everything at it!</li>
     <li>☀️🌙 <b>Day &amp; night</b> — the world cycles; nights are more dangerous.</li>
   </ul>
 
@@ -469,6 +469,40 @@ function buildBoss(){ // a giant armored beetle — the raid boss
   for(let i=0;i<3;i++)for(const s of[-1,1]){ const p=new THREE.Group(); p.position.set(s*4,4.2,3-i*3.2);
     const l=new THREE.Mesh(G_leg,dark); l.scale.set(2.3,3.4,2.3); l.position.set(s*2.8,-1.2,0); l.rotation.z=s*1.15; p.add(l); p.userData={ph:i*1.4,side:s}; body.add(p); legs.push(p); }
   return {g,body,legs};
+}
+function buildWasp(){ // fast flying raider that ignores walls
+  const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
+  const yel=new THREE.MeshStandardMaterial({color:0xe8c020,roughness:.5});
+  const blk=new THREE.MeshStandardMaterial({color:0x1a1408,roughness:.6});
+  const wingMat=new THREE.MeshStandardMaterial({color:0xcfe0ff,transparent:true,opacity:.6,side:THREE.DoubleSide,roughness:.2});
+  const ab=new THREE.Mesh(G_,yel); ab.scale.set(1.6,1.5,2.6); ab.position.set(0,2,-2); ab.castShadow=true; body.add(ab);
+  for(let i=0;i<2;i++){ const st=new THREE.Mesh(G_,blk); st.scale.set(1.66,1.56,0.5); st.position.set(0,2,-1.1-i*1.1); body.add(st); }
+  const sting=new THREE.Mesh(G_cone,blk); sting.scale.set(0.45,1.5,0.45); sting.position.set(0,2,-3.7); sting.rotation.x=-Math.PI/2; body.add(sting);
+  const th=new THREE.Mesh(G_,blk); th.scale.set(1.3,1.3,1.3); th.position.set(0,2,0.5); th.castShadow=true; body.add(th);
+  const head=new THREE.Mesh(G_,blk); head.scale.set(1.1,1.0,1.0); head.position.set(0,2,1.9); body.add(head);
+  body.add(sph(M.redeye,.3,.3,.3,-.5,2.2,2.2)); body.add(sph(M.redeye,.3,.3,.3,.5,2.2,2.2));
+  const wings=[]; for(const [side,zp] of [[1,0.9],[-1,0.9],[1,-0.2],[-1,-0.2]]){ const p=new THREE.Group(); p.position.set(side*0.5,2.9,zp);
+    const w=new THREE.Mesh(G_,wingMat); w.scale.set(3.0,0.1,1.3); w.position.set(side*2.9,0,0); p.add(w); p.userData={side}; body.add(p); wings.push(p); }
+  g.scale.setScalar(1.1);
+  return {g,body,wings};
+}
+function buildWorm(){ // slow, tanky, burrows underground
+  const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
+  const s1=new THREE.MeshStandardMaterial({color:0xba6c72,roughness:.6});
+  const s2=new THREE.MeshStandardMaterial({color:0x9a5058,roughness:.6});
+  const hd=new THREE.MeshStandardMaterial({color:0x7a3a42,roughness:.55});
+  const segs=[];
+  for(let i=0;i<6;i++){ const s=new THREE.Mesh(G_, i===0?hd:(i%2?s1:s2)); const sc=(i===0?2.3:2.0)*(1-i*0.045);
+    const by=sc*0.9; s.scale.set(sc,sc,sc); s.position.set(0,by,2.6-i*1.8); s.userData.baseY=by; s.castShadow=true; body.add(s); segs.push(s); }
+  for(const side of[-1,1]){ const m=new THREE.Mesh(G_cone,new THREE.MeshStandardMaterial({color:0x3a1a1a})); m.scale.set(0.45,1.2,0.45); m.position.set(side*0.9,1.9,4.0); m.rotation.x=Math.PI*0.6; m.rotation.z=side*0.3; body.add(m); }
+  body.add(sph(M.redeye,.3,.3,.3,-.7,2.6,3.4)); body.add(sph(M.redeye,.3,.3,.3,.7,2.6,3.4));
+  return {g,body,segs};
+}
+function buildWaspQueen(){ // giant flying boss
+  const r=buildWasp(); r.g.scale.setScalar(2.7);
+  const crown=new THREE.Mesh(G_cone,new THREE.MeshStandardMaterial({color:0xffd24a,emissive:0x8a6a10,emissiveIntensity:.45,metalness:.3}));
+  crown.scale.set(0.6,1.0,0.6); crown.position.set(0,3.3,1.0); r.body.add(crown);
+  return r;
 }
 
 // ---------- buildings ----------
@@ -1059,7 +1093,7 @@ function serialize(){
     queen:{hp:G.queen.hp,maxHp:G.queen.maxHp,layCd:G.queen.layCd},
     rivals:G.rivals.map(r=>({x:r.x,z:r.z,hp:r.hp,maxHp:r.maxHp,level:r.level,alive:r.alive,respawn:r.respawn,awake:r.awake,baseLvl:r.baseLvl})),
     ants:G.ants.filter(a=>a.alive).map(a=>({role:a.role,x:a.x,z:a.z,hp:a.hp,maxHp:a.maxHp,carryFood:a.carryFood||0,carryRocks:a.carryRocks||0})),
-    enemies:G.enemies.filter(e=>e.alive).map(e=>({x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,speed:e.speed,atk:e.atk,boss:!!e.boss})),
+    enemies:G.enemies.filter(e=>e.alive).map(e=>({x:e.x,z:e.z,hp:e.hp,maxHp:e.maxHp,speed:e.speed,atk:e.atk,boss:!!e.boss,kind:e.kind||'raider'})),
     builds:G.builds.map(b=>({kind:b.kind,gx:b.gx,gz:b.gz,built:b.built,prog:b.prog||0,hp:b.hp})),
     foods:G.foods.filter(f=>f.amount>0).map(f=>({x:f.x,z:f.z,amount:f.amount})),
     clutter:G.clutter.filter(c=>!c.removed).map(c=>({x:c.x,z:c.z,type:c.type})),
@@ -1109,9 +1143,7 @@ function reAnt(d){ const v=buildAnt(d.role); v.g.position.set(d.x,0,d.z); scene.
   G.ants.push({x:d.x,z:d.z,role:d.role,alive:true,hp:d.hp,maxHp:d.maxHp,speed:d.role==='soldier'?34:(28*(1+((G.upgrades&&G.upgrades.worker)||0)*0.12)),
     heading:0,wob:rnd(0,7),flash:0,atkCd:0,carryFood:d.carryFood||0,carryRocks:d.carryRocks||0,
     carryEgg:null,order:null,hold:{x:d.x,z:d.z},sentryTarget:null,sentryPause:0,view:v}); }
-function reEnemy(d){ if(d.boss){ addBoss(d.x,d.z,1); const e=G.enemies[G.enemies.length-1]; e.hp=d.hp; e.maxHp=d.maxHp; e.speed=d.speed; e.atk=d.atk; return; }
-  const v=buildEnemy(); v.g.position.set(d.x,0,d.z); scene.add(v.g);
-  G.enemies.push({x:d.x,z:d.z,hp:d.hp,maxHp:d.maxHp,speed:d.speed,atk:d.atk,alive:true,heading:0,wob:rnd(0,7),flash:0,atkCd:0,view:v}); }
+function reEnemy(d){ const kind=d.kind||(d.boss?'boss':'raider'); const e=addEnemyKind(kind,d.x,d.z,1); e.hp=d.hp; e.maxHp=d.maxHp; e.speed=d.speed; e.atk=d.atk; }
 function reBuild(d){ const v=buildStruct(d.kind); v.g.position.set(d.gx,0,d.gz); scene.add(v.g);
   const b={kind:d.kind,x:d.gx,z:d.gz,gx:d.gx,gz:d.gz,built:d.built,prog:d.prog||0,hp:d.hp,view:v};
   if(!d.built){ v.g.traverse(o=>{ if(o.isMesh){ o.userData.solid=o.material; o.material=M.ghost; o.castShadow=false; } }); }
@@ -1182,10 +1214,29 @@ function addAnt(role,ox,oz){
     speed:role==='soldier'?34:(28*(1+((G.upgrades&&G.upgrades.worker)||0)*0.12)),heading:0,wob:rnd(0,7),flash:0,atkCd:0,
     carryFood:0,carryRocks:0,carryEgg:null,order:null,hold,sentryTarget:null,sentryPause:0,view:v});
 }
-function spawnRaider(r){const v=buildEnemy();v.g.position.set(r.x+rnd(-8,8),0,r.z+rnd(-8,8));
-  scene.add(v.g);
-  const lv=r.level;G.enemies.push({x:v.g.position.x,z:v.g.position.z,hp:30+lv*10,maxHp:30+lv*10,speed:20+lv*1.5,atk:7+lv*2,
-    alive:true,heading:0,wob:rnd(0,7),flash:0,atkCd:0,view:v});}
+function enemyStats(kind,lv){
+  switch(kind){
+    case 'wasp':      return {hp:22+lv*7,  speed:34+lv*2,   atk:6+lv*2,    fly:true, y:14};
+    case 'worm':      return {hp:60+lv*18, speed:14+lv,     atk:10+lv*2.5, worm:true};
+    case 'boss':      return {hp:260+lv*110, speed:13,      atk:16+lv*4,   boss:true};
+    case 'waspqueen': return {hp:220+lv*95,  speed:22,      atk:14+lv*4,   boss:true, fly:true, y:17};
+    default:          return {hp:30+lv*10, speed:20+lv*1.5, atk:7+lv*2};
+  }
+}
+function buildForKind(kind){ return kind==='wasp'?buildWasp():kind==='worm'?buildWorm():kind==='waspqueen'?buildWaspQueen():kind==='boss'?buildBoss():buildEnemy(); }
+function addEnemyKind(kind,x,z,lv){
+  const v=buildForKind(kind); v.g.position.set(x,0,z); scene.add(v.g);
+  const s=enemyStats(kind,lv);
+  const e={x,z,kind,hp:s.hp,maxHp:s.hp,speed:s.speed,atk:s.atk,fly:!!s.fly,y:s.y||0,worm:!!s.worm,boss:!!s.boss,
+    burrowed:false,burrowCd:kind==='worm'?3:0,alive:true,heading:0,hv:0,wob:rnd(0,7),flash:0,atkCd:0,view:v};
+  if(s.boss){ const lel=document.createElement('div'); lel.className='float'; lel.style.fontSize='.7rem'; lel.style.pointerEvents='none'; labels.appendChild(lel); e.labelEl=lel; }
+  G.enemies.push(e); return e;
+}
+function spawnRaider(r){
+  const lv=r.level, roll=Math.random(); let kind='raider';
+  if(lv>=2 && roll<0.22) kind='wasp'; else if(lv>=2 && roll<0.40) kind='worm';
+  addEnemyKind(kind, r.x+rnd(-8,8), r.z+rnd(-8,8), lv);
+}
 function addRival(x,z,baseLvl){
   const v=buildRival(); v.position.set(x,0,z); scene.add(v);
   const dz=new THREE.Mesh(new THREE.CircleGeometry(RIVAL_TRIGGER,36),new THREE.MeshBasicMaterial({color:0xcc3322,transparent:true,opacity:0.12,side:THREE.DoubleSide}));
@@ -1194,12 +1245,7 @@ function addRival(x,z,baseLvl){
   G.rivals.push({x,z,hp,maxHp:hp,level:baseLvl,alive:true,respawn:0,awake:false,raidTimer:0,raidWarn:false,baseLvl,view:v,dzone:dz});
 }
 function createDefaultRivals(){ addRival(440,80,1); addRival(720,-360,2); addRival(640,-640,3); }
-function addBoss(x,z,lvl){
-  const v=buildBoss(); v.g.position.set(x,0,z); scene.add(v.g);
-  const hp=260+lvl*110;
-  const lel=document.createElement('div'); lel.className='float'; lel.style.fontSize='.7rem'; lel.style.pointerEvents='none'; labels.appendChild(lel);
-  G.enemies.push({x,z,hp,maxHp:hp,speed:13,atk:16+lvl*4,boss:true,alive:true,heading:0,wob:rnd(0,7),flash:0,atkCd:0,view:v,labelEl:lel});
-}
+function addBoss(x,z,lvl){ return addEnemyKind(Math.random()<0.5?'boss':'waspqueen', x, z, lvl); }
 function nearAnyRival(x,z,pad){ for(const r of G.rivals){ if(d2(x,z,r.x,r.z)<RIVAL_TRIGGER+pad) return true; } return false; }
 function addCritter(x,z){ const v=buildCritter(); v.g.position.set(x,0,z); scene.add(v.g);
   G.critters.push({x,z,alive:true,heading:rnd(0,7),hv:0,wob:rnd(0,7),spd:rnd(7,11),tx:x,tz:z,pause:rnd(0,1.5),view:v}); }
@@ -1324,7 +1370,7 @@ function deliverEgg(a,dt){
 function autoSoldier(a,dt){
   // engage nearby enemy or predator spider
   let e=null,_ebd=1e9;
-  for(const _e of G.enemies){if(!_e.alive)continue;const _ed=d2(a.x,a.z,_e.x,_e.z);if(_ed<_ebd){_ebd=_ed;e=_e;}}
+  for(const _e of G.enemies){if(!_e.alive||_e.burrowed)continue;const _ed=d2(a.x,a.z,_e.x,_e.z);if(_ed<_ebd){_ebd=_ed;e=_e;}}
   for(const _s of G.spiders){if(!_s.alive)continue;const _ed=d2(a.x,a.z,_s.x,_s.z);if(_ed<_ebd){_ebd=_ed;e=_s;}}
   const near=e&&(_ebd<120 || d2(e.x,e.z,G.nest.x,G.nest.z)<150);
   if(near){ a.sentryTarget=null; doAttack(a,e,dt); return; }
@@ -1371,19 +1417,22 @@ function tickEnemies(dt){
   for(const e of G.enemies){
     if(!e.alive)continue;
     e.wob+=dt*9;e.flash=Math.max(0,e.flash-dt*8);e.atkCd=Math.max(0,e.atkCd-dt);
+    // worms periodically burrow (fast, untargetable, can't attack) then surface
+    if(e.worm){ e.burrowCd-=dt; if(e.burrowCd<=0){ e.burrowed=!e.burrowed; e.burrowCd=e.burrowed?3:3.5; if(!e.burrowed)burst(e.x,e.z,0x8a5a3a,10); } }
+    if(e.worm&&e.burrowed){ moveTo(e,q.x,q.z,e.speed*1.6,dt,8); clampTerr(e); continue; }
     // attack adjacent ant
     let na=null,bd=1e9;for(const a of G.ants){if(!a.alive)continue;const d=d2(e.x,e.z,a.x,a.z);if(d<bd){bd=d;na=a;}}
     if(na&&bd<7){ if(e.atkCd<=0){na.hp-=e.atk;na.flash=1;e.atkCd=.7;if(na.hp<=0){na.alive=false;if(na.fetchEgg){na.fetchEgg.claimed=null;}if(na.carryEgg){na.carryEgg.carrier=null;na.carryEgg.claimed=null;na.carryEgg.x=G.nest.x;na.carryEgg.z=G.nest.z;na.carryEgg.y=12;}scene.remove(na.view.g);disposeGroup(na.view.g);burst(na.x,na.z,0xcc3322,8);const _ai=G.ants.indexOf(na);if(_ai>=0)G.ants.splice(_ai,1);}} }
-    // attack wall if blocking
-    const wall=collideWalls(e,4);
-    if(wall){ if(e.atkCd<=0){ wall.hp-=e.atk; e.atkCd=.7; burst(wall.x,wall.z,0xcc7744,3); if(wall.hp<=0){scene.remove(wall.view.g);G.cells.delete(cellKey(wall.gx,wall.gz));const i=G.builds.indexOf(wall);if(i>=0)G.builds.splice(i,1);} } }
+    // walls only block ground enemies (wasps fly over)
+    if(!e.fly){ const wall=collideWalls(e,4);
+      if(wall){ if(e.atkCd<=0){ wall.hp-=e.atk; e.atkCd=.7; burst(wall.x,wall.z,0xcc7744,3); if(wall.hp<=0){scene.remove(wall.view.g);disposeGroup(wall.view.g);G.cells.delete(cellKey(wall.gx,wall.gz));const i=G.builds.indexOf(wall);if(i>=0)G.builds.splice(i,1);} } } }
     // head to queen
     if(d2(e.x,e.z,q.x,q.z)<10){ if(e.atkCd<=0){q.hp-=e.atk;e.atkCd=.8;G.shake=Math.min(3,(G.shake||0)+.5);floatText(q.x,10,q.z,'-'+e.atk,'#cc3322');} }
     else moveTo(e,q.x,q.z,e.speed,dt,8);
     clampTerr(e);
   }
-  G.enemies=G.enemies.filter(e=>{ if(!e.alive){ scene.remove(e.view.g);
-    if(e.boss){ disposeGroup(e.view.g); if(e.labelEl)e.labelEl.remove();
+  G.enemies=G.enemies.filter(e=>{ if(!e.alive){ scene.remove(e.view.g); disposeGroup(e.view.g);
+    if(e.boss){ if(e.labelEl)e.labelEl.remove();
       burst(e.x,e.z,0xffd24a,40,60,10); for(let i=0;i<6;i++)burst(e.x+rnd(-22,22),e.z+rnd(-22,22),0xff6a3a,10,40,rnd(2,14));
       G.food=Math.min(_foodCap,G.food+30); G.sand+=20; G.wood+=15; G.rocks+=10;
       floatText(e.x,12,e.z,'🏆 BOSS DOWN!','#ffd24a'); ticker('🏆 Boss defeated! Huge loot for the colony (+food, sand, wood, rocks).','#ffd24a'); SND.bossDown(); G.shake=Math.min(4,(G.shake||0)+2); }
@@ -1452,7 +1501,7 @@ function tickDragonflies(dt){
     const perch=df.perch;
     // nearest live enemy within range of the perch
     let e=null,bd=1e9;
-    for(const en of G.enemies){ if(!en.alive)continue; const d=d2(perch.x,perch.z,en.x,en.z); if(d<DF_RANGE&&d<bd){bd=d;e=en;} }
+    for(const en of G.enemies){ if(!en.alive||en.burrowed)continue; const d=d2(perch.x,perch.z,en.x,en.z); if(d<DF_RANGE&&d<bd){bd=d;e=en;} }
     let tx,ty,tz,sp;
     if(e){
       df.state='dive'; df.target=e;
@@ -1501,7 +1550,7 @@ function tickCatapults(dt){
     b.cd=(b.cd||0)-dt;
     if(b.cd>0)continue;
     const CR=CAT_RANGE+(G.upgrades.catapult||0)*25;
-    const e=G.enemies.filter(en=>en.alive&&d2(b.x,b.z,en.x,en.z)<CR).sort((p,q)=>d2(b.x,b.z,p.x,p.z)-d2(b.x,b.z,q.x,q.z))[0];
+    const e=G.enemies.filter(en=>en.alive&&!en.burrowed&&d2(b.x,b.z,en.x,en.z)<CR).sort((p,q)=>d2(b.x,b.z,p.x,p.z)-d2(b.x,b.z,q.x,q.z))[0];
     if(!e){ b.cd=0.3; continue; }
     if(G.rocks<=0){ b.cd=0.7; if(!b._noAmmo){b._noAmmo=true;ticker('Catapult is out of rocks — send ants to collect more!','#e0a060');} continue; }
     b._noAmmo=false; G.rocks--; b.cd=CAT_COOLDOWN; updateHUD();
@@ -1518,7 +1567,7 @@ function tickProjectiles(dt){
       burst(pr.tx,pr.tz,0x9a7a4a,16,34,4); for(let k=0;k<6;k++)burst(pr.tx+rnd(-SPLASH_R,SPLASH_R),pr.tz+rnd(-SPLASH_R,SPLASH_R),0x8a8a90,2,10,2);
       G.shake=Math.min(3,(G.shake||0)+.6); SND.boom();
       const up=(G.upgrades.catapult||0), SR=SPLASH_R+up*4;
-      for(const e of G.enemies){ if(!e.alive)continue; if(d2(pr.tx,pr.tz,e.x,e.z)<SR){ e.hp-=rndI(18,28)+up*6; e.flash=1; if(e.hp<=0){e.alive=false;burst(e.x,e.z,0xcc3322,12);floatText(e.x,6,e.z,'down!','#c89a5a');} } }
+      for(const e of G.enemies){ if(!e.alive||e.burrowed)continue; if(d2(pr.tx,pr.tz,e.x,e.z)<SR){ e.hp-=rndI(18,28)+up*6; e.flash=1; if(e.hp<=0){e.alive=false;burst(e.x,e.z,0xcc3322,12);floatText(e.x,6,e.z,'down!','#c89a5a');} } }
       scene.remove(pr.mesh); pr.mesh.material.dispose(); G.projectiles.splice(i,1);
     }
   }
@@ -1646,9 +1695,18 @@ function sync(dt){
       if(eg.labelEl){const p=project(a.x,12,a.z);if(p.front){eg.labelEl.style.display='block';eg.labelEl.style.left=p.x+'px';eg.labelEl.style.top=p.y+'px';eg.labelEl.textContent='→ '+eg.dest;eg.labelEl.style.color='#c8a060';}else eg.labelEl.style.display='none';} }
   }
   for(const e of G.enemies){ if(!e.alive)continue; const v=e.view;
-    v.g.position.set(e.x,0,e.z); e.hv=lerpAng(e.hv||0,e.heading,0.18); v.g.rotation.y=e.hv;
-    v.body.position.y=Math.sin(e.wob*2)*0.2;
-    for(let i=0;i<v.legs.length;i++){const p=v.legs[i];p.rotation.x=Math.sin(e.wob*2.2+p.userData.ph)*0.4;}
+    e.hv=lerpAng(e.hv||0,e.heading,0.18); v.g.rotation.y=e.hv;
+    if(e.fly){
+      v.g.position.set(e.x, e.y+Math.sin(e.wob*2)*0.7, e.z);
+      const beat=Math.sin(G.time*26)*0.5; if(v.wings)for(const w of v.wings)w.rotation.z=w.userData.side*(0.2+beat);
+    } else if(e.worm){
+      v.g.position.set(e.x, e.burrowed?-7:0, e.z);
+      if(v.segs)for(let i=0;i<v.segs.length;i++)v.segs[i].position.y=(v.segs[i].userData.baseY||1)+Math.sin(e.wob*2.5-i*0.8)*0.4;
+    } else {
+      v.g.position.set(e.x,0,e.z);
+      v.body.position.y=Math.sin(e.wob*2)*0.2;
+      if(v.legs)for(let i=0;i<v.legs.length;i++){const p=v.legs[i];p.rotation.x=Math.sin(e.wob*2.2+p.userData.ph)*0.4;}
+    }
   }
   // critters: inch along with a gentle body ripple
   for(const c of G.critters){ if(!c.alive)continue; const v=c.view;
@@ -1716,7 +1774,7 @@ const selbox=document.getElementById('selbox');
 function pickList(){
   const arr=[ground];
   for(const a of G.ants)if(a.alive)arr.push(a.view.body);
-  for(const e of G.enemies)if(e.alive)arr.push(e.view.body);
+  for(const e of G.enemies)if(e.alive&&!e.burrowed)arr.push(e.view.body);
   for(const c of G.critters)if(c.alive)arr.push(c.view.body);
   for(const s of G.spiders)if(s.alive)arr.push(s.view.body);
   for(const f of G.foods)arr.push(f.view.hit);
