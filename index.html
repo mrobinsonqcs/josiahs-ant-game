@@ -29,6 +29,20 @@ body{background:#0e0a06;font-family:'Nunito',sans-serif;color:#f0d9a8;overflow:h
 #mmwrap{position:absolute;right:8px;top:8px;z-index:6;background:rgba(14,8,3,.78);border:1.5px solid #3d2510;border-radius:10px;padding:5px;backdrop-filter:blur(3px)}
 #mmap{display:block;width:150px;height:150px;border-radius:6px;background:#06070b}
 #mmlabel{text-align:center;font-size:.64rem;font-weight:800;color:#9be86a;margin-top:3px}
+#upwrap{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:40;align-items:center;justify-content:center}
+#upwrap.show{display:flex}
+#uppanel{background:#1c1208;border:2px solid #5c3a1e;border-radius:16px;padding:16px;width:min(94%,430px);max-height:86vh;overflow:auto}
+#uppanel h3{font-family:'Fredoka One';color:#f5b842;text-align:center;font-size:1.25rem}
+#uppanel .sub{text-align:center;color:#9a7a50;font-size:.7rem;margin:4px 0 12px}
+.uprow{display:flex;align-items:center;gap:9px;background:#251608;border:1px solid #3d2510;border-radius:10px;padding:8px;margin-bottom:8px}
+.uprow .ic{font-size:1.5rem}
+.uprow .info{flex:1;min-width:0}
+.uprow .nm{font-weight:800;font-size:.8rem;color:#f0d9a8}
+.uprow .ds{font-size:.64rem;color:#9a7a50}
+.uprow .lv{font-size:.64rem;color:#f5b842;margin-top:2px}
+.uprow button{background:#3d2510;border:1.5px solid #e8930a;color:#f5b842;border-radius:8px;padding:7px 10px;font-family:Nunito;font-weight:800;font-size:.68rem;cursor:pointer;white-space:nowrap}
+.uprow button:disabled{opacity:.4;cursor:not-allowed;border-color:#5c3a1e;color:#9a7a50}
+#upclose{display:block;margin:6px auto 0;background:#3d2510;border:1.5px solid #5c3a1e;color:#f0d9a8;border-radius:8px;padding:7px 24px;font-family:Nunito;font-weight:800;cursor:pointer}
 #zoom button{width:36px;height:36px;border-radius:9px;border:1.5px solid #5c3a1e;background:rgba(30,18,8,.85);color:#f0d9a8;font-size:1.2rem;font-weight:800;cursor:pointer}
 #hud{background:#100702;border-top:2px solid #3d2510;padding:7px 9px;display:flex;flex-direction:column;gap:6px;flex-shrink:0}
 .row{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
@@ -95,17 +109,26 @@ body.splash-active #hud{visibility:hidden}
     <button class="b" data-build="wall">🧱 Wall<span class="c">4 sand</span></button>
     <button class="b" data-build="perch">🪲 Perch<span class="c">16 sand</span></button>
     <button class="b" data-build="catapult">🪨 Catapult<span class="c">22 wood</span></button>
+    <button class="b" data-build="workshop">🔬 Workshop<span class="c">18s+14w</span></button>
     <button class="b" id="demolish-btn">🔨 Demolish</button>
     <button class="b" id="cancelbuild" style="display:none;border-color:#e06050;color:#f0a090">✕ Cancel</button>
   </div>
   <div class="row">
     <button class="b" id="sel-ants">Select all ants</button>
     <button class="b" id="sel-sol">Select all soldiers</button>
+    <button class="b" id="upg-btn">🔬 Upgrades</button>
     <button class="b" id="save-btn">💾 Save</button>
     <span id="ticker">Tap an ant to select it, then tap where to send it...</span>
   </div>
-  <div id="legend">Click <b>food</b>, <b>brush</b>, <b>trees</b> (wood), <b>rocks</b> (catapult ammo), <b>enemy</b>, or <b>rival</b> — nearest free ant dispatches automatically · chop trees for wood to build a <b>catapult</b>, then collect rocks so it can fire · tap an ant to grab its group · drag on ground to box-select a group · tap <b>nursery</b> or <b>barracks</b> to route eggs · two-finger or right-drag (or arrow keys) to pan · pick a build then tap the glowing grid to place it</div>
+  <div id="legend">Click <b>food</b>, <b>brush</b>, <b>trees</b> (wood), <b>rocks</b> (catapult ammo), <b>enemy</b>, or <b>rival</b> — nearest free ant dispatches automatically · chop trees for wood to build a <b>catapult</b>, then collect rocks so it can fire · build a <b>🔬 Workshop</b> to unlock <b>Upgrades</b> · crush all rival colonies to win · tap an ant to grab its group · drag to box-select · tap <b>nursery</b>/<b>barracks</b> to route eggs · two-finger/right-drag (or arrow keys) to pan</div>
 </div>
+
+<div id="upwrap"><div id="uppanel">
+  <h3>🔬 Research &amp; Upgrades</h3>
+  <div class="sub">Spend resources to permanently strengthen your colony</div>
+  <div id="uplist"></div>
+  <button id="upclose">Close</button>
+</div></div>
 
 <div id="splash">
   <canvas id="cine-canvas"></canvas>
@@ -140,9 +163,17 @@ function maxRegion(){ return REGION_ANTS.length-1; }
 function inTerritory(x,z){ const r=(G&&G.region)||0; return x>=WMIN+2&&x<=frontierX(r)-2&&z>=frontierZ(r)+2&&z<=WMAX-2; }
 function clampTerr(e){ const r=(G&&G.region)||0; e.x=clamp(e.x,WMIN+8,frontierX(r)-8); e.z=clamp(e.z,frontierZ(r)+8,WMAX-8); }
 function randTerrPoint(){ const r=(G&&G.region)||0,fx=frontierX(r),fz=frontierZ(r); return {x:rnd(WMIN+40,fx-40),z:rnd(fz+40,WMAX-40)}; }
-const COST={nursery:12,barracks:16,store:10,fungus:14,wall:4,perch:16,catapult:0};
-const WOODCOST={catapult:22};
-const BTIME={nursery:4,barracks:4,store:4,fungus:4,wall:1.5,perch:3,catapult:5};
+const COST={nursery:12,barracks:16,store:10,fungus:14,wall:4,perch:16,catapult:0,workshop:18};
+const WOODCOST={catapult:22,workshop:14};
+const BTIME={nursery:4,barracks:4,store:4,fungus:4,wall:1.5,perch:3,catapult:5,workshop:5};
+// ---- upgrade tree (unlocked by building a Workshop) ----
+const UPGRADES=[
+  {key:'soldier',  icon:'⚔️', name:'Soldier Strength',  desc:'Soldiers hit harder (+4 dmg/lvl)',      max:5, cost:l=>({sand:10+l*8, food:8+l*6})},
+  {key:'worker',   icon:'🐜', name:'Worker Training',   desc:'Workers move faster & carry more',       max:5, cost:l=>({food:10+l*8, sand:6+l*5})},
+  {key:'catapult', icon:'🪨', name:'Siege Engineering', desc:'Catapults: +damage, splash & range',     max:5, cost:l=>({wood:12+l*8, rocks:8+l*5})},
+  {key:'dragonfly',icon:'🪲', name:'Dragonfly Fury',    desc:'Dragonflies deal more dive damage (+6/lvl)',max:5, cost:l=>({food:14+l*9, wood:8+l*5})},
+  {key:'queen',    icon:'👑', name:'Royal Vigor',       desc:'+60 queen HP & faster egg-laying',       max:5, cost:l=>({food:16+l*10, sand:10+l*6})},
+];
 
 // ---------- renderer ----------
 const stage=document.getElementById('stage');
@@ -361,6 +392,14 @@ function buildStruct(kind){
     const loadRock=new THREE.Mesh(G_,new THREE.MeshStandardMaterial({color:0x8a8a90,roughness:.95}));loadRock.scale.setScalar(2);loadRock.position.set(0,2,14);arm.add(loadRock);
     arm.rotation.x=-0.5;g.add(arm);
     pick=base;
+  } else if(kind==='workshop'){
+    // a little research lab: platform, workbench, a big gear and a glowing vial
+    const plat=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x5a4330,roughness:.85}));plat.scale.set(8,1.6,8);plat.position.y=0.8;plat.castShadow=true;plat.receiveShadow=true;g.add(plat);
+    const bench=new THREE.Mesh(G_box,new THREE.MeshStandardMaterial({color:0x7a5a34,roughness:.7}));bench.scale.set(11,4,6);bench.position.set(0,3.6,-1);bench.castShadow=true;g.add(bench);
+    const gear=new THREE.Mesh(G_ring,new THREE.MeshStandardMaterial({color:0x9a9aa6,roughness:.5,metalness:.6}));gear.scale.set(1.5,1.5,1.5);gear.position.set(-3.5,7,-1);gear.rotation.x=Math.PI/2;gear.castShadow=true;g.add(gear);
+    const vial=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x4fd0e0,emissive:0x1a7a90,emissiveIntensity:.8,roughness:.3}));vial.scale.set(1.3,4,1.3);vial.position.set(3.5,6.6,-1);g.add(vial);
+    const roofPost=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x5a4330}));roofPost.scale.set(1,8,1);roofPost.position.set(5,5,4);g.add(roofPost);
+    pick=bench;
   }
   return {g,pick,arm};
 }
@@ -828,6 +867,7 @@ function startGame(){
   G={ food:15, sand:0, wood:0, rocks:0, region:0, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], critters:[], spiders:[], rivals:[], cells:new Set(), patches:[],
     queen:{x:nest.x,z:nest.z,hp:160,maxHp:160,layCd:5},
     phase:'dormant', raidActive:false, bossTimer:70, bossWarn:false,
+    upgrades:{soldier:0,worker:0,catapult:0,dragonfly:0,queen:0},
     sel:[], buildMode:null, over:false, time:0, shake:0, _h:0, nurseHint:false, eggDest:'nursery' };
   for(let i=0;i<5;i++) addAnt('ant');
   addAnt('soldier'); addAnt('soldier');
@@ -879,7 +919,7 @@ function serialize(){
   return { v:1,
     food:G.food, sand:G.sand, wood:G.wood, rocks:G.rocks, region:G.region, time:G.time,
     phase:G.phase, raidActive:G.raidActive, bossTimer:G.bossTimer, bossWarn:G.bossWarn,
-    eggDest:G.eggDest, nurseHint:G.nurseHint,
+    upgrades:G.upgrades, eggDest:G.eggDest, nurseHint:G.nurseHint,
     queen:{hp:G.queen.hp,maxHp:G.queen.maxHp,layCd:G.queen.layCd},
     rivals:G.rivals.map(r=>({x:r.x,z:r.z,hp:r.hp,maxHp:r.maxHp,level:r.level,alive:r.alive,respawn:r.respawn,awake:r.awake,baseLvl:r.baseLvl})),
     ants:G.ants.filter(a=>a.alive).map(a=>({role:a.role,x:a.x,z:a.z,hp:a.hp,maxHp:a.maxHp,carryFood:a.carryFood||0,carryRocks:a.carryRocks||0})),
@@ -901,9 +941,36 @@ function saveProgress(silent){
 function hasSave(){ try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; } }
 function clearSave(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
 function updateContinueBtn(){ const c=document.getElementById('splash-continue'); if(c)c.style.display=hasSave()?'inline-block':'none'; }
+// ---------- upgrades ----------
+function hasWorkshop(){ return builtOf('workshop').length>0; }
+function applyWorkerSpeed(){ const mul=1+(G.upgrades.worker||0)*0.12; for(const a of G.ants){ if(a.role==='ant') a.speed=28*mul; } }
+function renderUpgrades(){
+  const list=document.getElementById('uplist'); list.innerHTML='';
+  for(const u of UPGRADES){
+    const lv=G.upgrades[u.key]||0, maxed=lv>=u.max, c=maxed?null:u.cost(lv);
+    const costStr=maxed?'MAX':Object.entries(c).map(([k,v])=>v+' '+k).join(' + ');
+    const afford=!maxed&&Object.entries(c).every(([k,v])=>Math.floor(G[k])>=v);
+    const row=document.createElement('div'); row.className='uprow';
+    row.innerHTML='<span class="ic">'+u.icon+'</span><div class="info"><div class="nm">'+u.name+'</div><div class="ds">'+u.desc+'</div><div class="lv">Lv '+lv+' / '+u.max+'</div></div>';
+    const btn=document.createElement('button'); btn.textContent=costStr; btn.disabled=maxed||!afford; btn.onclick=()=>buyUpgrade(u.key);
+    row.appendChild(btn); list.appendChild(row);
+  }
+}
+function buyUpgrade(key){
+  const u=UPGRADES.find(x=>x.key===key), lv=G.upgrades[key]||0; if(lv>=u.max)return;
+  const c=u.cost(lv); if(!Object.entries(c).every(([k,v])=>Math.floor(G[k])>=v)){ ticker('Not enough resources for that upgrade.','#e06050'); return; }
+  for(const [k,v] of Object.entries(c)) G[k]-=v;
+  G.upgrades[key]=lv+1;
+  if(key==='worker') applyWorkerSpeed();
+  if(key==='queen'){ G.queen.maxHp+=60; G.queen.hp=Math.min(G.queen.maxHp,G.queen.hp+60); }
+  burst(G.nest.x,G.nest.z,0x8fd0ff,16,30,10);
+  ticker(u.icon+' '+u.name+' → Lv '+(lv+1)+'!','#8fd0ff');
+  renderUpgrades(); updateHUD();
+}
+function openUpgrades(){ if(!G||G.over)return; if(!hasWorkshop()){ ticker('Build a 🔬 Workshop first to research upgrades.','#f5b842'); return; } renderUpgrades(); document.getElementById('upwrap').classList.add('show'); }
 // --- rebuild one entity from saved data, reusing the normal model builders ---
 function reAnt(d){ const v=buildAnt(d.role); v.g.position.set(d.x,0,d.z); scene.add(v.g);
-  G.ants.push({x:d.x,z:d.z,role:d.role,alive:true,hp:d.hp,maxHp:d.maxHp,speed:d.role==='soldier'?34:28,
+  G.ants.push({x:d.x,z:d.z,role:d.role,alive:true,hp:d.hp,maxHp:d.maxHp,speed:d.role==='soldier'?34:(28*(1+((G.upgrades&&G.upgrades.worker)||0)*0.12)),
     heading:0,wob:rnd(0,7),flash:0,atkCd:0,carryFood:d.carryFood||0,carryRocks:d.carryRocks||0,
     carryEgg:null,order:null,hold:{x:d.x,z:d.z},sentryTarget:null,sentryPause:0,view:v}); }
 function reEnemy(d){ if(d.boss){ addBoss(d.x,d.z,1); const e=G.enemies[G.enemies.length-1]; e.hp=d.hp; e.maxHp=d.maxHp; e.speed=d.speed; e.atk=d.atk; return; }
@@ -939,6 +1006,7 @@ function loadProgress(){
     ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], critters:[], spiders:[], rivals:[], cells:new Set(), patches:[],
     queen:{x:nest.x,z:nest.z,hp:d.queen.hp,maxHp:d.queen.maxHp,layCd:d.queen.layCd},
     phase:d.phase, raidActive:!!d.raidActive, bossTimer:d.bossTimer!=null?d.bossTimer:70, bossWarn:!!d.bossWarn,
+    upgrades:Object.assign({soldier:0,worker:0,catapult:0,dragonfly:0,queen:0}, d.upgrades||{}),
     sel:[], buildMode:null, over:false, time:d.time||0, shake:0, _h:0, nurseHint:!!d.nurseHint, eggDest:d.eggDest||'nursery' };
   if(d.rivals){ for(const rd of d.rivals){ addRival(rd.x,rd.z,rd.baseLvl||1); const r=G.rivals[G.rivals.length-1];
       r.hp=rd.hp; r.maxHp=rd.maxHp; r.level=rd.level; r.alive=rd.alive; r.respawn=rd.respawn||0; r.awake=!!rd.awake;
@@ -975,7 +1043,7 @@ function addAnt(role,ox,oz){
   scene.add(v.g);
   const hold=(role==='soldier'&&ox!==undefined)?{x:ox,z:oz}:null;
   G.ants.push({x:px,z:pz,role,alive:true,hp:role==='soldier'?80:34,maxHp:role==='soldier'?80:34,
-    speed:role==='soldier'?34:28,heading:0,wob:rnd(0,7),flash:0,atkCd:0,
+    speed:role==='soldier'?34:(28*(1+((G.upgrades&&G.upgrades.worker)||0)*0.12)),heading:0,wob:rnd(0,7),flash:0,atkCd:0,
     carryFood:0,carryRocks:0,carryEgg:null,order:null,hold,sentryTarget:null,sentryPause:0,view:v});
 }
 function spawnRaider(r){const v=buildEnemy();v.g.position.set(r.x+rnd(-8,8),0,r.z+rnd(-8,8));
@@ -1079,7 +1147,7 @@ function nearestClutter(a,filter){let best=null,bd=1e9;for(const c of G.clutter)
 function nearestRockPile(a){let best=null,bd=1e9;for(const r of G.rockpiles){if(r.amount<=0)continue;const d=d2(a.x,a.z,r.x,r.z);if(d<bd){bd=d;best=r;}}return best;}
 function doGather(a,f,dt){
   if(d2(a.x,a.z,f.x,f.z)>7){ moveTo(a,f.x,f.z,a.speed,dt,7); return; }
-  const take=Math.min(f.amount,5);f.amount-=take;a.carryFood=take;burst(a.x,a.z,0x6ec22e,4);
+  const take=Math.min(f.amount,5+(G.upgrades.worker||0));f.amount-=take;a.carryFood=take;burst(a.x,a.z,0x6ec22e,4);
   if(f.amount<=0){scene.remove(f.view.g);const i=G.foods.indexOf(f);if(i>=0)G.foods.splice(i,1);if(Math.random()<.7){const p=randTerrPoint();addFood(p.x,p.z);}}
   if(a.order&&a.order.type==='gather')a.order=null;
 }
@@ -1139,7 +1207,7 @@ function autoSoldier(a,dt){
 function doAttack(a,e,dt){
   if(!e.alive){a.order=null;return;}
   if(moveTo(a,e.x,e.z,a.speed,dt,6)){}
-  if(d2(a.x,a.z,e.x,e.z)<8&&a.atkCd<=0){ e.hp-=rndI(9,16)+builtOf('barracks').length*3; e.flash=1; a.atkCd=.4; burst(e.x,e.z,0xf5b842,4); G.shake=Math.min(2,(G.shake||0)+.3);
+  if(d2(a.x,a.z,e.x,e.z)<8&&a.atkCd<=0){ e.hp-=rndI(9,16)+builtOf('barracks').length*3+(G.upgrades.soldier||0)*4; e.flash=1; a.atkCd=.4; burst(e.x,e.z,0xf5b842,4); G.shake=Math.min(2,(G.shake||0)+.3);
     if(e.hp<=0){ e.alive=false; burst(e.x,e.z,0xcc3322,12); floatText(e.x,6,e.z,'down!','#f5b842'); if(a.order&&a.order.type==='attack')a.order=null; } }
 }
 function doRaid(a,dt){
@@ -1256,7 +1324,7 @@ function tickDragonflies(dt){
         // plunge at the enemy
         tx=e.x; ty=6; tz=e.z; sp=185;
         if(d2(df.x,df.z,e.x,e.z)<9 && df.y<13){
-          e.hp-=rndI(15,22); e.flash=1; df.atkCd=1.2;
+          e.hp-=rndI(15,22)+(G.upgrades.dragonfly||0)*6; e.flash=1; df.atkCd=1.2;
           burst(e.x,e.z,0x8fe0d0,9); G.shake=Math.min(2,(G.shake||0)+.3);
           if(e.hp<=0){ e.alive=false; burst(e.x,e.z,0xcc3322,12); floatText(e.x,6,e.z,'down!','#8fe0d0'); }
         }
@@ -1296,7 +1364,8 @@ function tickCatapults(dt){
   for(const b of builtOf('catapult')){
     b.cd=(b.cd||0)-dt;
     if(b.cd>0)continue;
-    const e=G.enemies.filter(en=>en.alive&&d2(b.x,b.z,en.x,en.z)<CAT_RANGE).sort((p,q)=>d2(b.x,b.z,p.x,p.z)-d2(b.x,b.z,q.x,q.z))[0];
+    const CR=CAT_RANGE+(G.upgrades.catapult||0)*25;
+    const e=G.enemies.filter(en=>en.alive&&d2(b.x,b.z,en.x,en.z)<CR).sort((p,q)=>d2(b.x,b.z,p.x,p.z)-d2(b.x,b.z,q.x,q.z))[0];
     if(!e){ b.cd=0.3; continue; }
     if(G.rocks<=0){ b.cd=0.7; if(!b._noAmmo){b._noAmmo=true;ticker('Catapult is out of rocks — send ants to collect more!','#e0a060');} continue; }
     b._noAmmo=false; G.rocks--; b.cd=CAT_COOLDOWN; updateHUD();
@@ -1312,7 +1381,8 @@ function tickProjectiles(dt){
       // impact: splash damage to every enemy near the landing point
       burst(pr.tx,pr.tz,0x9a7a4a,16,34,4); for(let k=0;k<6;k++)burst(pr.tx+rnd(-SPLASH_R,SPLASH_R),pr.tz+rnd(-SPLASH_R,SPLASH_R),0x8a8a90,2,10,2);
       G.shake=Math.min(3,(G.shake||0)+.6);
-      for(const e of G.enemies){ if(!e.alive)continue; if(d2(pr.tx,pr.tz,e.x,e.z)<SPLASH_R){ e.hp-=rndI(18,28); e.flash=1; if(e.hp<=0){e.alive=false;burst(e.x,e.z,0xcc3322,12);floatText(e.x,6,e.z,'down!','#c89a5a');} } }
+      const up=(G.upgrades.catapult||0), SR=SPLASH_R+up*4;
+      for(const e of G.enemies){ if(!e.alive)continue; if(d2(pr.tx,pr.tz,e.x,e.z)<SR){ e.hp-=rndI(18,28)+up*6; e.flash=1; if(e.hp<=0){e.alive=false;burst(e.x,e.z,0xcc3322,12);floatText(e.x,6,e.z,'down!','#c89a5a');} } }
       scene.remove(pr.mesh); pr.mesh.material.dispose(); G.projectiles.splice(i,1);
     }
   }
@@ -1333,7 +1403,7 @@ function tickColony(dt){
   const remaining=dest==='nursery'?aC-(liveAnts+pendAnts):sC-(liveSol+pendSol);
   const layCount=destFull?0:Math.min(nurses+1,remaining);
   if(q.layCd<=0){
-    if(layCount>0&&G.food>=6*layCount){ G.food-=6*layCount; for(let e=0;e<layCount;e++) layEgg(); q.layCd=6;
+    if(layCount>0&&G.food>=6*layCount){ G.food-=6*layCount; for(let e=0;e<layCount;e++) layEgg(); q.layCd=Math.max(3,6-(G.upgrades.queen||0)*0.6);
       G._capMsg=null;
       if(nurses===0&&!G.nurseHint){G.nurseHint=true;ticker('An egg is on the nest. Build a nursery so ants can hatch it.','#f5d76a');}
     } else if(destFull&&G._capMsg!==dest){
@@ -1365,7 +1435,9 @@ function crushRival(r){ r.alive=false; r.respawn=20; r.awake=false;
   r.dzone.visible=false;
   G.food=Math.min(_foodCap,G.food+20); G.sand+=15;
   if(!G.rivals.some(x=>x.alive)){ G.raidActive=false; for(const a of G.ants)if(a.order&&a.order.type==='raid')a.order=null; }
-  ticker('💥 Rival colony destroyed! +20 food, +15 sand. It will rebuild stronger.','#7bc455'); }
+  const aliveN=G.rivals.filter(x=>x.alive).length;
+  if(aliveN===1) ticker('⚔️ Only ONE rival colony left — crush it (before they rebuild) to WIN!','#ffd24a');
+  else ticker('💥 Rival colony destroyed! +20 food, +15 sand. It will rebuild stronger.','#7bc455'); }
 function tickRivals(dt){
   for(const r of G.rivals){
     if(!r.alive){ r.respawn-=dt; if(r.respawn<=0) reviveRival(r); continue; }
@@ -1686,6 +1758,9 @@ document.getElementById('splash-continue').onclick=()=>{
   setTimeout(()=>{document.body.classList.remove('splash-active');loadProgress();},500);
 };
 document.getElementById('save-btn').onclick=()=>{ if(G&&!G.over)saveProgress(false); };
+document.getElementById('upg-btn').onclick=openUpgrades;
+document.getElementById('upclose').onclick=()=>document.getElementById('upwrap').classList.remove('show');
+document.getElementById('upwrap').addEventListener('pointerdown',e=>{ if(e.target.id==='upwrap')document.getElementById('upwrap').classList.remove('show'); e.stopPropagation(); });
 window.addEventListener('beforeunload',()=>{ if(G&&!G.over)saveProgress(true); });
 
 // ---------- HUD ----------
@@ -1714,6 +1789,9 @@ function updateBanner(){ if(!G)return;
   document.getElementById('btime').textContent=isNight()?'🌙 Night':'☀️ Day';
 }
 function checkEnd(){ if(G.over)return;
+  if(G.rivals.length>0 && G.rivals.every(r=>!r.alive)){ G.over=true;
+    burst(G.nest.x,G.nest.z,0xffd24a,40,60,12); for(let i=0;i<8;i++)burst(G.nest.x+rnd(-30,30),G.nest.z+rnd(-30,30),0x9be86a,10,40,rnd(4,16));
+    over('🏆 Victory!','You crushed every rival colony at once — the whole world is yours!','#ffd24a'); return; }
   if(G.queen.hp<=0){G.over=true;over('The queen has fallen','Without her the colony scatters. Build a stronger guard next time.','#cc3322');return;}
   if(G.ants.filter(a=>a.alive).length<=0&&G.eggs.length<=0&&G.hatch.length<=0){G.over=true;over('Colony lost','No ants remain. Keep some safe at home next time.','#cc3322');}
 }
