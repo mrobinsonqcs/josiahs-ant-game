@@ -123,6 +123,10 @@ body.splash-active #hud{visibility:hidden}
     <button class="b" data-build="perch">🪲 Perch<span class="c">16 sand</span></button>
     <button class="b" data-build="catapult">🪨 Catapult<span class="c">22 wood</span></button>
     <button class="b" data-build="workshop">🔬 Workshop<span class="c">18s+14w</span></button>
+    <button class="b" data-build="scoutpost">🔭 Scout Post<span class="c">14s+6w</span></button>
+    <button class="b" data-build="medictent">⛑️ Medic Tent<span class="c">14 sand</span></button>
+    <button class="b" data-build="trap">🕳️ Trap<span class="c">8 sand</span></button>
+    <button class="b" data-build="watchtower">🗼 Watchtower<span class="c">12s+10w</span></button>
     <button class="b" id="demolish-btn">🔨 Demolish</button>
     <button class="b" id="cancelbuild" style="display:none;border-color:#e06050;color:#f0a090">✕ Cancel</button>
   </div>
@@ -184,6 +188,10 @@ body.splash-active #hud{visibility:hidden}
     <li>🪲 <b>Perch</b> — spawns a <b>dragonfly</b> that dives on nearby enemies.</li>
     <li>🪨 <b>Catapult</b> — auto-fires rocks with splash damage (keep it stocked with rock ammo!).</li>
     <li>🔬 <b>Workshop</b> — unlocks the <b>Upgrades</b> menu.</li>
+    <li>🔭 <b>Scout Post</b> — spawns a fast <b>Scout</b> that chases and nips at raiders (great against quick wasps).</li>
+    <li>⛑️ <b>Medic Tent</b> — spawns a <b>Medic</b> that heals your wounded soldiers and scouts.</li>
+    <li>🕳️ <b>Trap</b> — hurts and <b>slows</b> raiders that walk over it. Place them on the path to your queen!</li>
+    <li>🗼 <b>Watchtower</b> — spots raids early (alarm) and gives nearby soldiers +attack.</li>
   </ul>
   <p>Tap <b>🔨 Demolish</b> then a building to remove it and get some resources back.</p>
 
@@ -241,9 +249,9 @@ function maxRegion(){ return REGION_ANTS.length-1; }
 function inTerritory(x,z){ const r=(G&&G.region)||0; return x>=WMIN+2&&x<=frontierX(r)-2&&z>=frontierZ(r)+2&&z<=WMAX-2; }
 function clampTerr(e){ const r=(G&&G.region)||0; e.x=clamp(e.x,WMIN+8,frontierX(r)-8); e.z=clamp(e.z,frontierZ(r)+8,WMAX-8); }
 function randTerrPoint(){ const r=(G&&G.region)||0,fx=frontierX(r),fz=frontierZ(r); return {x:rnd(WMIN+40,fx-40),z:rnd(fz+40,WMAX-40)}; }
-const COST={nursery:12,barracks:16,store:10,fungus:14,wall:4,perch:16,catapult:0,workshop:18};
-const WOODCOST={catapult:22,workshop:14};
-const BTIME={nursery:4,barracks:4,store:4,fungus:4,wall:1.5,perch:3,catapult:5,workshop:5};
+const COST={nursery:12,barracks:16,store:10,fungus:14,wall:4,perch:16,catapult:0,workshop:18,scoutpost:14,medictent:14,trap:8,watchtower:12};
+const WOODCOST={catapult:22,workshop:14,scoutpost:6,watchtower:10};
+const BTIME={nursery:4,barracks:4,store:4,fungus:4,wall:1.5,perch:3,catapult:5,workshop:5,scoutpost:4,medictent:4,trap:2,watchtower:5};
 // ---- upgrade tree (unlocked by building a Workshop) ----
 const UPGRADES=[
   {key:'soldier',  icon:'⚔️', name:'Soldier Strength',  desc:'Soldiers hit harder (+4 dmg/lvl)',      max:5, cost:l=>({sand:10+l*8, food:8+l*6})},
@@ -504,6 +512,28 @@ function buildWaspQueen(){ // giant flying boss
   crown.scale.set(0.6,1.0,0.6); crown.position.set(0,3.3,1.0); r.body.add(crown);
   return r;
 }
+function buildScout(){ // fast, nimble skirmisher ant
+  const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
+  const c=new THREE.MeshStandardMaterial({color:0x8ad0a0,roughness:.5}), dk=new THREE.MeshStandardMaterial({color:0x4a8a66,roughness:.6});
+  body.add(sph(c,1.1,1.0,1.5,0,1.4,-1.3,true)); body.add(sph(c,0.8,0.8,0.9,0,1.35,0.1,true)); body.add(sph(c,0.95,0.95,0.95,0,1.5,1.3,true));
+  body.add(sph(M.eye,.22,.22,.22,-.45,1.8,1.9)); body.add(sph(M.eye,.22,.22,.22,.45,1.8,1.9));
+  for(const s of[-1,1]){const an=new THREE.Mesh(G_leg,dk);an.position.set(s*.35,2.1,2.4);an.rotation.x=-.9;an.rotation.z=s*.25;an.scale.set(.5,.7,.5);body.add(an);}
+  for(let i=0;i<3;i++)for(const s of[-1,1]){const l=new THREE.Mesh(G_leg,dk);l.scale.set(.6,.7,.6);l.position.set(s*1.1,1.0,0.7-i*0.7);l.rotation.z=s*1.1;body.add(l);}
+  g.scale.setScalar(0.85);
+  return {g,body};
+}
+function buildMedic(){ // heals nearby allies
+  const g=new THREE.Group(), body=new THREE.Group(); g.add(body);
+  const c=new THREE.MeshStandardMaterial({color:0xf0ece0,roughness:.5}), dk=new THREE.MeshStandardMaterial({color:0xb0a890,roughness:.6});
+  body.add(sph(c,1.3,1.25,1.7,0,1.5,-1.4,true)); body.add(sph(c,0.95,0.95,1.0,0,1.45,0.1,true)); body.add(sph(c,1.05,1.05,1.05,0,1.6,1.5,true));
+  body.add(sph(M.eye,.24,.24,.24,-.5,1.9,2.1)); body.add(sph(M.eye,.24,.24,.24,.5,1.9,2.1));
+  const crossMat=new THREE.MeshStandardMaterial({color:0xd83a3a,emissive:0x5a0808,emissiveIntensity:.4});
+  const cv=new THREE.Mesh(G_box,crossMat);cv.scale.set(0.4,1.4,0.3);cv.position.set(0,2.5,-1.4);body.add(cv);
+  const ch=new THREE.Mesh(G_box,crossMat);ch.scale.set(1.4,0.4,0.3);ch.position.set(0,2.5,-1.4);body.add(ch);
+  for(let i=0;i<3;i++)for(const s of[-1,1]){const l=new THREE.Mesh(G_leg,dk);l.scale.set(.7,.7,.7);l.position.set(s*1.2,1.1,0.7-i*0.7);l.rotation.z=s*1.05;body.add(l);}
+  g.scale.setScalar(1.0);
+  return {g,body};
+}
 
 // ---------- buildings ----------
 function buildStruct(kind){
@@ -570,6 +600,36 @@ function buildStruct(kind){
     const vial=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x4fd0e0,emissive:0x1a7a90,emissiveIntensity:.8,roughness:.3}));vial.scale.set(1.3,4,1.3);vial.position.set(3.5,6.6,-1);g.add(vial);
     const roofPost=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x5a4330}));roofPost.scale.set(1,8,1);roofPost.position.set(5,5,4);g.add(roofPost);
     pick=bench;
+  } else if(kind==='scoutpost'){
+    // a lookout post with a little telescope
+    const base=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x6a4e2c,roughness:.85}));base.scale.set(6,1.4,6);base.position.y=0.7;base.castShadow=true;base.receiveShadow=true;g.add(base);
+    for(const[sx,sz]of[[-1,-1],[1,-1],[-1,1],[1,1]]){const p=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x5a3e20}));p.scale.set(0.8,7,0.8);p.position.set(sx*3.5,4,sz*3.5);p.castShadow=true;g.add(p);}
+    const deck=new THREE.Mesh(G_box,new THREE.MeshStandardMaterial({color:0x7a5a34,roughness:.7}));deck.scale.set(9,1.4,9);deck.position.y=8;deck.castShadow=true;g.add(deck);
+    const scope=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x2a2a30,roughness:.4,metalness:.6}));scope.scale.set(0.9,4,0.9);scope.position.set(1.5,10,0);scope.rotation.z=-0.6;scope.rotation.x=-0.3;g.add(scope);
+    const lens=new THREE.Mesh(G_,new THREE.MeshStandardMaterial({color:0x6fe0ff,emissive:0x2a8aa0,emissiveIntensity:.6}));lens.scale.setScalar(0.8);lens.position.set(3,11.3,0);g.add(lens);
+    pick=deck;
+  } else if(kind==='medictent'){
+    // a canvas tent with a red cross
+    const floor=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x8a7a5a,roughness:.9}));floor.scale.set(7,0.8,7);floor.position.y=0.4;floor.receiveShadow=true;g.add(floor);
+    const tent=new THREE.Mesh(G_cone,new THREE.MeshStandardMaterial({color:0xeae6da,roughness:.8}));tent.scale.set(9,9,9);tent.position.y=5;tent.castShadow=true;g.add(tent);
+    const crossMat=new THREE.MeshStandardMaterial({color:0xd83a3a,emissive:0x5a0808,emissiveIntensity:.3});
+    const cv=new THREE.Mesh(G_box,crossMat);cv.scale.set(1.2,4,0.4);cv.position.set(0,6,3.4);g.add(cv);
+    const ch=new THREE.Mesh(G_box,crossMat);ch.scale.set(4,1.2,0.4);ch.position.set(0,6,3.4);g.add(ch);
+    pick=tent;
+  } else if(kind==='trap'){
+    // a spiked pit that hurts & slows raiders
+    const rim=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x5a4326,roughness:1}));rim.scale.set(GRID*0.45,1.2,GRID*0.45);rim.position.y=0.6;rim.receiveShadow=true;g.add(rim);
+    const pit=new THREE.Mesh(new THREE.CircleGeometry(GRID*0.36,18),new THREE.MeshBasicMaterial({color:0x140a04}));pit.rotation.x=-Math.PI/2;pit.position.y=1.0;g.add(pit);
+    for(let i=0;i<7;i++){const a=(i/7)*Math.PI*2,r=GRID*0.24;const sp=new THREE.Mesh(G_cone,new THREE.MeshStandardMaterial({color:0x9a9aa0,roughness:.5,metalness:.4}));sp.scale.set(0.9,3.2,0.9);sp.position.set(Math.cos(a)*r,1.8,Math.sin(a)*r);sp.castShadow=true;g.add(sp);}
+    pick=rim;
+  } else if(kind==='watchtower'){
+    // a tall tower that spots raids early and rallies nearby defenders
+    for(const[sx,sz]of[[-1,-1],[1,-1],[-1,1],[1,1]]){const leg=new THREE.Mesh(G_cyl,new THREE.MeshStandardMaterial({color:0x5a3e20,roughness:.9}));leg.scale.set(1,20,1);leg.position.set(sx*3,10,sz*3);leg.castShadow=true;g.add(leg);}
+    const deck=new THREE.Mesh(G_box,new THREE.MeshStandardMaterial({color:0x7a5a34,roughness:.7}));deck.scale.set(10,1.6,10);deck.position.y=20;deck.castShadow=true;g.add(deck);
+    const rail=new THREE.Mesh(G_box,new THREE.MeshStandardMaterial({color:0x6a4a28}));rail.scale.set(10,3,1);rail.position.set(0,22,4.5);g.add(rail);
+    const roof=new THREE.Mesh(G_cone,new THREE.MeshStandardMaterial({color:0x8a3320,roughness:.7}));roof.scale.set(8,6,8);roof.position.y=26;roof.castShadow=true;g.add(roof);
+    const beacon=new THREE.Mesh(G_,new THREE.MeshStandardMaterial({color:0xffd24a,emissive:0xaa7a10,emissiveIntensity:.7}));beacon.scale.setScalar(1.3);beacon.position.y=30;g.add(beacon);
+    pick=deck;
   }
   return {g,pick,arm};
 }
@@ -1011,6 +1071,8 @@ function clearWorld(){
   if(G.rockpiles)for(const r of G.rockpiles){disposeGroup(r.view.g);scene.remove(r.view.g);}
   if(G.critters)for(const c of G.critters){disposeGroup(c.view.g);scene.remove(c.view.g);}
   if(G.spiders)for(const s of G.spiders){disposeGroup(s.view.g);scene.remove(s.view.g);}
+  if(G.scouts)for(const s of G.scouts){disposeGroup(s.view.g);scene.remove(s.view.g);}
+  if(G.medics)for(const m of G.medics){disposeGroup(m.view.g);scene.remove(m.view.g);}
   if(G.projectiles)for(const pr of G.projectiles){scene.remove(pr.mesh);pr.mesh.material.dispose();}
   for(const p of G.patches){p.geometry.dispose();p.material.dispose();scene.remove(p);}
 }
@@ -1034,7 +1096,7 @@ function startGame(){
   const nest={x:-640,z:640};
   placeBases(nest);
 
-  G={ food:15, sand:0, wood:0, rocks:0, region:0, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], critters:[], spiders:[], rivals:[], cells:new Set(), patches:[],
+  G={ food:15, sand:0, wood:0, rocks:0, region:0, nest, ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], critters:[], spiders:[], scouts:[], medics:[], rivals:[], cells:new Set(), patches:[],
     queen:{x:nest.x,z:nest.z,hp:160,maxHp:160,layCd:5},
     phase:'dormant', raidActive:false, bossTimer:70, bossWarn:false,
     upgrades:{soldier:0,worker:0,catapult:0,dragonfly:0,queen:0},
@@ -1151,6 +1213,8 @@ function reBuild(d){ const v=buildStruct(d.kind); v.g.position.set(d.gx,0,d.gz);
   if(d.built){
     if(d.kind==='nursery'||d.kind==='barracks'){const lel=document.createElement('div');lel.className='float';lel.style.fontSize='.65rem';lel.style.pointerEvents='none';labels.appendChild(lel);b.labelEl=lel;}
     if(d.kind==='perch') spawnDragonfly(b);
+    if(d.kind==='scoutpost') spawnScout(b);
+    if(d.kind==='medictent') spawnMedic(b);
   } }
 function reFood(d){ const v=buildFood(); v.g.position.set(d.x,0,d.z); scene.add(v.g); G.foods.push({x:d.x,z:d.z,amount:d.amount,view:v}); }
 function reRock(d){ const v=buildRockPile(); v.g.position.set(d.x,0,d.z); scene.add(v.g); G.rockpiles.push({x:d.x,z:d.z,amount:d.amount,view:v}); }
@@ -1171,7 +1235,7 @@ function loadProgress(){
   const nest={x:-640,z:640};
   placeBases(nest);
   G={ food:d.food, sand:d.sand, wood:d.wood, rocks:d.rocks, region:d.region||0, nest,
-    ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], critters:[], spiders:[], rivals:[], cells:new Set(), patches:[],
+    ants:[], enemies:[], builds:[], foods:[], clutter:[], rockpiles:[], projectiles:[], eggs:[], hatch:[], dragonflies:[], critters:[], spiders:[], scouts:[], medics:[], rivals:[], cells:new Set(), patches:[],
     queen:{x:nest.x,z:nest.z,hp:d.queen.hp,maxHp:d.queen.maxHp,layCd:d.queen.layCd},
     phase:d.phase, raidActive:!!d.raidActive, bossTimer:d.bossTimer!=null?d.bossTimer:70, bossWarn:!!d.bossWarn,
     upgrades:Object.assign({soldier:0,worker:0,catapult:0,dragonfly:0,queen:0}, d.upgrades||{}),
@@ -1389,7 +1453,7 @@ function autoSoldier(a,dt){
 function doAttack(a,e,dt){
   if(!e.alive){a.order=null;return;}
   if(moveTo(a,e.x,e.z,a.speed,dt,6)){}
-  if(d2(a.x,a.z,e.x,e.z)<8&&a.atkCd<=0){ e.hp-=rndI(9,16)+builtOf('barracks').length*3+(G.upgrades.soldier||0)*4; e.flash=1; a.atkCd=.4; burst(e.x,e.z,0xf5b842,4); SND.hit(); G.shake=Math.min(2,(G.shake||0)+.3);
+  if(d2(a.x,a.z,e.x,e.z)<8&&a.atkCd<=0){ e.hp-=rndI(9,16)+builtOf('barracks').length*3+(G.upgrades.soldier||0)*4+(nearWatchtower(a.x,a.z)?4:0); e.flash=1; a.atkCd=.4; burst(e.x,e.z,0xf5b842,4); SND.hit(); G.shake=Math.min(2,(G.shake||0)+.3);
     if(e.hp<=0){ e.alive=false; burst(e.x,e.z,0xcc3322,12); floatText(e.x,6,e.z,'down!','#f5b842'); SND.enemyDown(); if(a.order&&a.order.type==='attack')a.order=null; } }
 }
 function doRaid(a,dt){
@@ -1416,10 +1480,11 @@ function tickEnemies(dt){
   const q=G.queen;
   for(const e of G.enemies){
     if(!e.alive)continue;
-    e.wob+=dt*9;e.flash=Math.max(0,e.flash-dt*8);e.atkCd=Math.max(0,e.atkCd-dt);
+    e.wob+=dt*9;e.flash=Math.max(0,e.flash-dt*8);e.atkCd=Math.max(0,e.atkCd-dt);e.slowT=Math.max(0,(e.slowT||0)-dt);
+    const slowMul=e.slowT>0?0.5:1;
     // worms periodically burrow (fast, untargetable, can't attack) then surface
     if(e.worm){ e.burrowCd-=dt; if(e.burrowCd<=0){ e.burrowed=!e.burrowed; e.burrowCd=e.burrowed?3:3.5; if(!e.burrowed)burst(e.x,e.z,0x8a5a3a,10); } }
-    if(e.worm&&e.burrowed){ moveTo(e,q.x,q.z,e.speed*1.6,dt,8); clampTerr(e); continue; }
+    if(e.worm&&e.burrowed){ moveTo(e,q.x,q.z,e.speed*1.6*slowMul,dt,8); clampTerr(e); continue; }
     // attack adjacent ant
     let na=null,bd=1e9;for(const a of G.ants){if(!a.alive)continue;const d=d2(e.x,e.z,a.x,a.z);if(d<bd){bd=d;na=a;}}
     if(na&&bd<7){ if(e.atkCd<=0){na.hp-=e.atk;na.flash=1;e.atkCd=.7;if(na.hp<=0){na.alive=false;if(na.fetchEgg){na.fetchEgg.claimed=null;}if(na.carryEgg){na.carryEgg.carrier=null;na.carryEgg.claimed=null;na.carryEgg.x=G.nest.x;na.carryEgg.z=G.nest.z;na.carryEgg.y=12;}scene.remove(na.view.g);disposeGroup(na.view.g);burst(na.x,na.z,0xcc3322,8);const _ai=G.ants.indexOf(na);if(_ai>=0)G.ants.splice(_ai,1);}} }
@@ -1428,7 +1493,7 @@ function tickEnemies(dt){
       if(wall){ if(e.atkCd<=0){ wall.hp-=e.atk; e.atkCd=.7; burst(wall.x,wall.z,0xcc7744,3); if(wall.hp<=0){scene.remove(wall.view.g);disposeGroup(wall.view.g);G.cells.delete(cellKey(wall.gx,wall.gz));const i=G.builds.indexOf(wall);if(i>=0)G.builds.splice(i,1);} } } }
     // head to queen
     if(d2(e.x,e.z,q.x,q.z)<10){ if(e.atkCd<=0){q.hp-=e.atk;e.atkCd=.8;G.shake=Math.min(3,(G.shake||0)+.5);floatText(q.x,10,q.z,'-'+e.atk,'#cc3322');} }
-    else moveTo(e,q.x,q.z,e.speed,dt,8);
+    else moveTo(e,q.x,q.z,e.speed*slowMul,dt,8);
     clampTerr(e);
   }
   G.enemies=G.enemies.filter(e=>{ if(!e.alive){ scene.remove(e.view.g); disposeGroup(e.view.g);
@@ -1494,6 +1559,60 @@ function removeDragonfly(df){
   scene.remove(df.view.shadow); df.view.shadow.geometry.dispose(); df.view.shadow.material.dispose();
   const i=G.dragonflies.indexOf(df); if(i>=0)G.dragonflies.splice(i,1);
   if(df.perch)df.perch.dragonfly=null;
+}
+// ---------- scouts & medics (each housed by its building, like a perch's dragonfly) ----------
+const SCOUT_RANGE=150, MEDIC_RANGE=130, MEDIC_HEAL=11;
+function spawnScout(post){ const v=buildScout(); v.g.position.set(post.x+rnd(-6,6),0,post.z+rnd(-6,6)); scene.add(v.g);
+  const sc={x:v.g.position.x,z:v.g.position.z,hp:26,maxHp:26,speed:52,atk:6,atkCd:0,heading:0,hv:0,wob:rnd(0,7),flash:0,post,tx:post.x,tz:post.z,pause:0,view:v};
+  post.scout=sc; G.scouts.push(sc); ticker('🔭 A scout joins the patrol!','#9be86a'); }
+function removeScout(sc){ burst(sc.x,sc.z,0x8ad0a0,10); scene.remove(sc.view.g); disposeGroup(sc.view.g); const i=G.scouts.indexOf(sc); if(i>=0)G.scouts.splice(i,1); if(sc.post)sc.post.scout=null; }
+function spawnMedic(post){ const v=buildMedic(); v.g.position.set(post.x+rnd(-6,6),0,post.z+rnd(-6,6)); scene.add(v.g);
+  const m={x:v.g.position.x,z:v.g.position.z,speed:30,heading:0,hv:0,wob:rnd(0,7),post,tx:post.x,tz:post.z,pause:0,view:v};
+  post.medic=m; G.medics.push(m); ticker('⛑️ A medic is ready to heal your troops!','#9be86a'); }
+function removeMedic(m){ burst(m.x,m.z,0xf0ece0,10); scene.remove(m.view.g); disposeGroup(m.view.g); const i=G.medics.indexOf(m); if(i>=0)G.medics.splice(i,1); if(m.post)m.post.medic=null; }
+function patrol(u,dt,px,pz,spd,minR,maxR){ if(u.pause>0){u.pause-=dt;return;} if(moveTo(u,u.tx,u.tz,spd,dt,4)){ const a=Math.random()*7,r=minR+Math.random()*(maxR-minR); u.tx=px+Math.cos(a)*r; u.tz=pz+Math.sin(a)*r; u.pause=rnd(0.3,1.4); } }
+function tickScouts(dt){
+  for(const sc of G.scouts){
+    sc.wob+=dt*14; sc.flash=Math.max(0,sc.flash-dt*8); sc.atkCd=Math.max(0,sc.atkCd-dt);
+    let e=null,bd=1e9;
+    for(const en of G.enemies){ if(!en.alive||en.burrowed)continue; const d=d2(sc.x,sc.z,en.x,en.z); if(d<bd){bd=d;e=en;} }
+    for(const s of G.spiders){ if(!s.alive)continue; const d=d2(sc.x,sc.z,s.x,s.z); if(d<bd){bd=d;e=s;} }
+    if(e && bd<SCOUT_RANGE){
+      if(bd<6){ if(sc.atkCd<=0){ e.hp-=sc.atk+(G.upgrades.soldier||0)*2; e.flash=1; sc.atkCd=.5; burst(e.x,e.z,0xcfe9b0,3); SND.hit();
+        if(e.hp<=0){ e.alive=false; burst(e.x,e.z,0xcc3322,8); SND.enemyDown(); } } }
+      else moveTo(sc,e.x,e.z,sc.speed,dt,5);
+    } else patrol(sc,dt,sc.post.x,sc.post.z,sc.speed*0.55,20,55);
+    clampTerr(sc);
+  }
+}
+function tickMedics(dt){
+  for(const m of G.medics){
+    m.wob+=dt*10;
+    let tgt=null,bd=1e9;
+    for(const a of G.ants){ if(!a.alive||a.hp>=a.maxHp)continue; const d=d2(m.x,m.z,a.x,a.z); if(d<bd){bd=d;tgt=a;} }
+    for(const s of G.scouts){ if(s.hp>=s.maxHp)continue; const d=d2(m.x,m.z,s.x,s.z); if(d<bd){bd=d;tgt=s;} }
+    if(tgt && bd<MEDIC_RANGE){
+      if(bd<8){ tgt.hp=Math.min(tgt.maxHp,tgt.hp+MEDIC_HEAL*dt); if(Math.random()<dt*2.5)burst(tgt.x,tgt.z,0x9be86a,2); }
+      else moveTo(m,tgt.x,tgt.z,m.speed,dt,7);
+    } else patrol(m,dt,m.post.x,m.post.z,m.speed*0.5,12,30);
+    clampTerr(m);
+  }
+}
+function tickTraps(dt){
+  for(const b of builtOf('trap')){
+    b.cd=(b.cd||0)-dt; let hit=false;
+    for(const e of G.enemies){ if(!e.alive||e.burrowed)continue; if(d2(b.x,b.z,e.x,e.z)<GRID*0.85){ e.slowT=0.5; hit=true;
+      if(b.cd<=0){ e.hp-=rndI(6,10); e.flash=1; if(e.hp<=0){ e.alive=false; burst(e.x,e.z,0xcc3322,8); SND.enemyDown(); } } } }
+    if(hit && b.cd<=0){ burst(b.x,b.z,0xcc7744,6); b.cd=0.6; SND.hit(); }
+  }
+}
+function nearWatchtower(x,z){ for(const b of builtOf('watchtower')){ if(d2(x,z,b.x,b.z)<140) return true; } return false; }
+function tickWatch(dt){
+  if(builtOf('watchtower').length===0)return;
+  G._watchCd=(G._watchCd||0)-dt; if(G._watchCd>0)return;
+  for(const b of builtOf('watchtower')){
+    for(const e of G.enemies){ if(e.alive && d2(b.x,b.z,e.x,e.z)<320){ G._watchCd=9; SND.alarm(); ticker('🗼 Watchtower: raiders spotted approaching!','#ffd24a'); return; } }
+  }
 }
 function tickDragonflies(dt){
   for(const df of G.dragonflies){
@@ -1654,7 +1773,11 @@ function tickBosses(dt){
 function finishBuild(b){ burst(b.x,b.z,0xf5b842,10); SND.build(); ticker(b.kind+' complete!','#7bc455');
   if(b.kind==='nursery'||b.kind==='barracks'){const lel=document.createElement('div');lel.className='float';lel.style.fontSize='.65rem';lel.style.pointerEvents='none';labels.appendChild(lel);b.labelEl=lel;}
   if(b.kind==='perch') spawnDragonfly(b);
+  if(b.kind==='scoutpost') spawnScout(b);
+  if(b.kind==='medictent') spawnMedic(b);
   if(b.kind==='catapult') ticker('Catapult ready! It flings rocks at enemies in range.','#e0b060');
+  if(b.kind==='trap') ticker('Trap set! Raiders that step on it get hurt and slowed.','#e0b060');
+  if(b.kind==='watchtower') ticker('Watchtower built! It spots raids early and rallies nearby defenders.','#e0b060');
   updateHUD(); }
 function cellValid(gx,gz){
   if(G.cells.has(cellKey(gx,gz))) return false;
@@ -1720,6 +1843,11 @@ function sync(dt){
     for(let i=0;i<v.legs.length;i++){const p=v.legs[i];p.rotation.x=Math.sin(s.wob*3.2+p.userData.ph+(p.userData.side<0?0:Math.PI))*0.45;}
     v.g.scale.setScalar(1.15*(s.flash>0?1.12:1));
   }
+  // scouts: quick scuttle; medics: gentle bob
+  for(const sc of G.scouts){ const v=sc.view; v.g.position.set(sc.x,0,sc.z); sc.hv=lerpAng(sc.hv||0,sc.heading,0.25); v.g.rotation.y=sc.hv;
+    v.body.position.y=Math.sin(sc.wob*2.6)*0.3; v.g.scale.setScalar(0.85*(sc.flash>0?1.15:1)); }
+  for(const m of G.medics){ const v=m.view; v.g.position.set(m.x,0,m.z); m.hv=lerpAng(m.hv||0,m.heading,0.2); v.g.rotation.y=m.hv;
+    v.body.position.y=Math.sin(m.wob*2)*0.22; }
   // dragonflies: hover, beat wings, pitch/bank, cast a moving shadow
   for(const df of G.dragonflies){ const v=df.view;
     v.g.position.set(df.x,df.y,df.z);
@@ -1881,6 +2009,8 @@ function handleTap(px,py){
       const sref=Math.floor(sandCost(b.kind)*f), wref=Math.floor(woodCost(b.kind)*f);
       for(const a of G.ants)if(a.order&&a.order.type==='build'&&a.order.b===b)a.order=null;
       if(b.dragonfly)removeDragonfly(b.dragonfly);
+      if(b.scout)removeScout(b.scout);
+      if(b.medic)removeMedic(b.medic);
       if(b.labelEl)b.labelEl.remove();
       scene.remove(b.view.g);disposeGroup(b.view.g);
       G.cells.delete(cellKey(b.gx,b.gz));
@@ -2038,6 +2168,8 @@ function drawMinimap(dt){
   for(const r of G.rockpiles) dot(r.x,r.z,'#aeb0b8',1);
   for(const c of G.critters){ if(c.alive) dot(c.x,c.z,'#9ad84c',1); }
   for(const a of G.ants){ if(a.alive) dot(a.x,a.z,a.role==='soldier'?'#ff9a3a':'#cfe9b0',1.1); }
+  for(const sc of G.scouts) dot(sc.x,sc.z,'#8ad0a0',1);
+  for(const m of G.medics) dot(m.x,m.z,'#f0ece0',1);
   for(const df of G.dragonflies) dot(df.x,df.z,'#8fe0d0',1.4);
   for(const s of G.spiders){ if(s.alive) dot(s.x,s.z,'#c850e0',1.6); }
   for(const e of G.enemies){ if(e.alive) dot(e.x,e.z,e.boss?'#ff8a00':'#ff3b30',e.boss?3.2:1.6); }
@@ -2064,6 +2196,8 @@ function loop(){
     try{tickSpiders(dt);}catch(e){console.error('spiders',e);}
     try{tickDayNight();}catch(e){console.error('daynight',e);}
     try{tickDragonflies(dt);}catch(e){console.error('dragonflies',e);}
+    try{tickScouts(dt);tickMedics(dt);}catch(e){console.error('scoutmedic',e);}
+    try{tickTraps(dt);tickWatch(dt);}catch(e){console.error('trapwatch',e);}
     try{tickCatapults(dt);}catch(e){console.error('catapults',e);}
     try{tickProjectiles(dt);}catch(e){console.error('projectiles',e);}
     try{sync(dt);}catch(e){console.error('sync',e);}
