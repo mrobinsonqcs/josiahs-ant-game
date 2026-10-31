@@ -131,6 +131,7 @@ body.splash-active #hud{visibility:hidden}
     <button class="b" id="sel-sol">Select all soldiers</button>
     <button class="b" id="upg-btn">🔬 Upgrades</button>
     <button class="b" id="help-btn">❓ Help</button>
+    <button class="b" id="mute-btn">🔊</button>
     <button class="b" id="save-btn">💾 Save</button>
     <span id="ticker">Tap an ant to select it, then tap where to send it...</span>
   </div>
@@ -302,6 +303,64 @@ function tickDayNight(){
   _curHemi.copy(_nightHemiSky).lerp(_dayHemiSky,f); hemi.color.copy(_curHemi);
   _curBg.copy(_nightBg).lerp(_dayBg,f); scene.background.copy(_curBg); if(scene.fog)scene.fog.color.copy(_curBg);
 }
+
+// ---------- sound & music (Web Audio, all synthesized — no files) ----------
+const SND=(function(){
+  let ctx=null, master=null, muted=false, musicOn=false, musicTimer=null, pad=null;
+  try{ muted=localStorage.getItem('antwarz_mute')==='1'; }catch(e){}
+  function ensure(){ if(ctx)return; try{ const AC=window.AudioContext||window.webkitAudioContext; ctx=new AC(); master=ctx.createGain(); master.gain.value=muted?0:0.33; master.connect(ctx.destination); }catch(e){ ctx=null; } }
+  function resume(){ ensure(); if(ctx&&ctx.state==='suspended')ctx.resume(); }
+  function at(off){ return (ctx?ctx.currentTime:0)+(off||0); }
+  function tone(freq,dur,type,vol,when,slideTo){ if(!ctx||muted)return; const t=when||ctx.currentTime; const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type=type||'sine'; o.frequency.setValueAtTime(freq,t); if(slideTo)o.frequency.exponentialRampToValueAtTime(Math.max(20,slideTo),t+dur);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol||0.2,t+0.012); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.03); }
+  function noise(dur,vol,filt,when){ if(!ctx||muted)return; const t=when||ctx.currentTime; const len=Math.max(1,Math.floor(ctx.sampleRate*dur));
+    const buf=ctx.createBuffer(1,len,ctx.sampleRate); const d=buf.getChannelData(0); for(let i=0;i<len;i++)d[i]=Math.random()*2-1;
+    const n=ctx.createBufferSource(); n.buffer=buf; const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=filt||1200;
+    const g=ctx.createGain(); g.gain.setValueAtTime(vol||0.2,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    n.connect(f); f.connect(g); g.connect(master); n.start(t); n.stop(t+dur); }
+  const _last={}; function thr(key,ms,fn){ const t=performance.now(); if(t-(_last[key]||0)<ms)return; _last[key]=t; fn(); }
+  function startMusic(){ ensure(); if(!ctx||musicOn)return; musicOn=true;
+    try{ pad={o1:ctx.createOscillator(),o2:ctx.createOscillator(),g:ctx.createGain(),f:ctx.createBiquadFilter()};
+      pad.o1.type='sine'; pad.o2.type='sine'; pad.o1.frequency.value=98; pad.o2.frequency.value=98*1.006;
+      pad.f.type='lowpass'; pad.f.frequency.value=420; pad.g.gain.value=0.045;
+      pad.o1.connect(pad.f); pad.o2.connect(pad.f); pad.f.connect(pad.g); pad.g.connect(master); pad.o1.start(); pad.o2.start();
+    }catch(e){} scheduleNote(); }
+  function stopMusic(){ musicOn=false; if(musicTimer){clearTimeout(musicTimer);musicTimer=null;} if(pad){ try{pad.o1.stop();pad.o2.stop();}catch(e){} pad=null; } }
+  function scheduleNote(){ if(!musicOn||!ctx)return; const night=(typeof isNight==='function')&&isNight();
+    const scale=night?[0,3,5,7,10]:[0,2,4,7,9], base=night?130.81:174.61;
+    const n=scale[Math.floor(Math.random()*scale.length)]+(Math.random()<0.4?12:0), freq=base*Math.pow(2,n/12);
+    tone(freq, night?1.8:1.2, 'sine', 0.05); if(Math.random()<0.3) tone(freq*1.5, 1.0,'triangle',0.025);
+    musicTimer=setTimeout(scheduleNote, night? rnd(1700,2800):rnd(1000,1700)); }
+  return {
+    resume, startMusic, stopMusic,
+    isMuted:()=>muted,
+    setMuted:(m)=>{ muted=m; try{localStorage.setItem('antwarz_mute',m?'1':'0');}catch(e){} if(master)master.gain.value=m?0:0.33; },
+    gather:()=>thr('ga',70,()=>tone(620,0.1,'sine',0.09,0,920)),
+    chop:(tree)=>thr('ch',80,()=>{ noise(0.07,0.13,tree?900:1500); tone(tree?150:220,0.1,'triangle',0.08); }),
+    rock:()=>thr('ro',80,()=>{ noise(0.06,0.12,2200); tone(300,0.07,'square',0.06); }),
+    place:()=>{ const t=at(); tone(300,0.08,'square',0.09,t); tone(450,0.1,'square',0.08,t+0.07); },
+    build:()=>{ const t=at(); tone(523,0.1,'triangle',0.1,t); tone(784,0.14,'triangle',0.1,t+0.1); },
+    egg:()=>tone(880,0.08,'sine',0.06,0,1200),
+    hatch:()=>{ const t=at(); tone(660,0.08,'sine',0.08,t); tone(990,0.12,'sine',0.08,t+0.07); },
+    hit:()=>thr('hi',60,()=>{ noise(0.05,0.1,2600); tone(200,0.05,'square',0.05,0,120); }),
+    nom:()=>tone(520,0.1,'triangle',0.09,0,260),
+    bite:()=>{ noise(0.09,0.12,700); tone(90,0.12,'sawtooth',0.08,0,60); },
+    enemyDown:()=>tone(400,0.22,'square',0.09,0,90),
+    catapult:()=>{ const t=at(); noise(0.08,0.14,600,t); tone(160,0.14,'triangle',0.1,t,70); },
+    boom:()=>{ const t=at(); noise(0.22,0.26,380,t); tone(70,0.3,'sine',0.18,t,40); },
+    whoosh:()=>noise(0.18,0.08,1800),
+    alarm:()=>{ const t=at(); tone(760,0.14,'square',0.1,t); tone(560,0.16,'square',0.1,t+0.16); },
+    unlock:()=>{ const t=at(); [523,659,784,1047].forEach((f,i)=>tone(f,0.16,'triangle',0.09,t+i*0.09)); },
+    upgrade:()=>{ const t=at(); [659,988,1319].forEach((f,i)=>tone(f,0.16,'sine',0.08,t+i*0.07)); },
+    rivalDown:()=>{ const t=at(); [392,523,659].forEach((f,i)=>tone(f,0.18,'square',0.09,t+i*0.09)); },
+    bossRoar:()=>{ const t=at(); noise(0.5,0.2,260,t); tone(55,0.6,'sawtooth',0.2,t,38); tone(82,0.5,'sawtooth',0.12,t); },
+    bossDown:()=>{ const t=at(); [262,330,392,523,659,784].forEach((f,i)=>tone(f,0.2,'triangle',0.1,t+i*0.1)); noise(0.3,0.16,500,t); },
+    victory:()=>{ const t=at(); [523,523,523,659,784,784,1047].forEach((f,i)=>tone(f,0.24,'triangle',0.11,t+i*0.16)); },
+    defeat:()=>{ const t=at(); [440,392,330,262].forEach((f,i)=>tone(f,0.32,'sawtooth',0.1,t+i*0.2)); },
+  };
+})();
 
 // ---------- ground ----------
 function groundTex(){
@@ -976,7 +1035,7 @@ function unlockRegion(r){
   G.region=r;
   spawnRegionContent(r);
   updateLockedOverlay();
-  burst(G.nest.x,G.nest.z,0x9be86a,24,46,12);
+  burst(G.nest.x,G.nest.z,0x9be86a,24,46,12); SND.unlock();
   G.shake=Math.min(3,(G.shake||0)+1.2);
   const last=r>=maxRegion();
   ticker(last?'🌍 The whole world is yours to roam! New frontiers unlocked.':'🌍 New land unlocked! Your territory has grown — explore it.','#9be86a');
@@ -1040,7 +1099,7 @@ function buyUpgrade(key){
   G.upgrades[key]=lv+1;
   if(key==='worker') applyWorkerSpeed();
   if(key==='queen'){ G.queen.maxHp+=60; G.queen.hp=Math.min(G.queen.maxHp,G.queen.hp+60); }
-  burst(G.nest.x,G.nest.z,0x8fd0ff,16,30,10);
+  burst(G.nest.x,G.nest.z,0x8fd0ff,16,30,10); SND.upgrade();
   ticker(u.icon+' '+u.name+' → Lv '+(lv+1)+'!','#8fd0ff');
   renderUpgrades(); updateHUD();
 }
@@ -1151,7 +1210,7 @@ function addRockPile(x,z){ if(G&&nearAnyRival(x,z,50))return; if(G&&d2(x,z,G.nes
 function addClutter(x,z){if(d2(x,z,G.nest.x,G.nest.z)<34)return; if(G&&nearAnyRival(x,z,40))return; const v=buildClutter();v.g.position.set(x,0,z);scene.add(v.g);G.clutter.push({x,z,type:v.type,view:v});}
 function layEgg(){const v=buildEggMesh();const n=G.nest;const x=n.x+rnd(-6,6),z=n.z+rnd(-6,6);v.position.set(x,12,z);scene.add(v);
   const lel=document.createElement('div');lel.className='float';lel.style.fontSize='.65rem';lel.style.pointerEvents='none';labels.appendChild(lel);
-  G.eggs.push({x,z,y:12,dest:G.eggDest||'nursery',carrier:null,claimed:null,mesh:v,labelEl:lel});burst(n.x,n.z,0xf5b842,5,18,12);}
+  G.eggs.push({x,z,y:12,dest:G.eggDest||'nursery',carrier:null,claimed:null,mesh:v,labelEl:lel});burst(n.x,n.z,0xf5b842,5,18,12);SND.egg();}
 
 // ---------- helpers ----------
 function sandCost(k){return COST[k]||0;}
@@ -1224,14 +1283,14 @@ function nearestClutter(a,filter){let best=null,bd=1e9;for(const c of G.clutter)
 function nearestRockPile(a){let best=null,bd=1e9;for(const r of G.rockpiles){if(r.amount<=0)continue;const d=d2(a.x,a.z,r.x,r.z);if(d<bd){bd=d;best=r;}}return best;}
 function doGather(a,f,dt){
   if(d2(a.x,a.z,f.x,f.z)>7){ moveTo(a,f.x,f.z,a.speed,dt,7); return; }
-  const take=Math.min(f.amount,5+(G.upgrades.worker||0));f.amount-=take;a.carryFood=take;burst(a.x,a.z,0x6ec22e,4);
+  const take=Math.min(f.amount,5+(G.upgrades.worker||0));f.amount-=take;a.carryFood=take;burst(a.x,a.z,0x6ec22e,4);SND.gather();
   if(f.amount<=0){scene.remove(f.view.g);const i=G.foods.indexOf(f);if(i>=0)G.foods.splice(i,1);if(Math.random()<.7){const p=randTerrPoint();addFood(p.x,p.z);}}
   if(a.order&&a.order.type==='gather')a.order=null;
 }
 function doClear(a,c,dt){
   const isTree=c.type==='tree', reach=isTree?9:7, need=isTree?3:2;
   if(d2(a.x,a.z,c.x,c.z)>reach){ moveTo(a,c.x,c.z,a.speed,dt,reach); return; }
-  c.prog=(c.prog||0)+dt; if(Math.random()<dt*6)burst(c.x,c.z,isTree?0x8a5a2a:0x6e9a3a,2);
+  c.prog=(c.prog||0)+dt; if(Math.random()<dt*6){burst(c.x,c.z,isTree?0x8a5a2a:0x6e9a3a,2);SND.chop(isTree);}
   if(c.prog>=need){ c.removed=true; scene.remove(c.view.g); barePatch(c.x,c.z); const i=G.clutter.indexOf(c);if(i>=0)G.clutter.splice(i,1);
     if(isTree){ G.wood+=5; floatText(c.x,10,c.z,'+5 wood','#c89a5a'); burst(c.x,c.z,0x8a5a2a,6); }
     else { G.sand+=3; floatText(c.x,8,c.z,'+3 sand','#d2a85a'); }
@@ -1239,7 +1298,7 @@ function doClear(a,c,dt){
 }
 function doCollectRocks(a,r,dt){
   if(d2(a.x,a.z,r.x,r.z)>7){ moveTo(a,r.x,r.z,a.speed,dt,7); return; }
-  const take=Math.min(r.amount,4); r.amount-=take; a.carryRocks=(a.carryRocks||0)+take; burst(a.x,a.z,0x9a9aa0,4);
+  const take=Math.min(r.amount,4); r.amount-=take; a.carryRocks=(a.carryRocks||0)+take; burst(a.x,a.z,0x9a9aa0,4); SND.rock();
   if(r.amount<=0){ scene.remove(r.view.g); disposeGroup(r.view.g); const i=G.rockpiles.indexOf(r); if(i>=0)G.rockpiles.splice(i,1); if(Math.random()<.6){const p=randTerrPoint();addRockPile(p.x,p.z);} }
   if(a.order&&a.order.type==='collect')a.order=null;
 }
@@ -1284,8 +1343,8 @@ function autoSoldier(a,dt){
 function doAttack(a,e,dt){
   if(!e.alive){a.order=null;return;}
   if(moveTo(a,e.x,e.z,a.speed,dt,6)){}
-  if(d2(a.x,a.z,e.x,e.z)<8&&a.atkCd<=0){ e.hp-=rndI(9,16)+builtOf('barracks').length*3+(G.upgrades.soldier||0)*4; e.flash=1; a.atkCd=.4; burst(e.x,e.z,0xf5b842,4); G.shake=Math.min(2,(G.shake||0)+.3);
-    if(e.hp<=0){ e.alive=false; burst(e.x,e.z,0xcc3322,12); floatText(e.x,6,e.z,'down!','#f5b842'); if(a.order&&a.order.type==='attack')a.order=null; } }
+  if(d2(a.x,a.z,e.x,e.z)<8&&a.atkCd<=0){ e.hp-=rndI(9,16)+builtOf('barracks').length*3+(G.upgrades.soldier||0)*4; e.flash=1; a.atkCd=.4; burst(e.x,e.z,0xf5b842,4); SND.hit(); G.shake=Math.min(2,(G.shake||0)+.3);
+    if(e.hp<=0){ e.alive=false; burst(e.x,e.z,0xcc3322,12); floatText(e.x,6,e.z,'down!','#f5b842'); SND.enemyDown(); if(a.order&&a.order.type==='attack')a.order=null; } }
 }
 function doRaid(a,dt){
   let r=null,bd=1e9; for(const _r of G.rivals){ if(!_r.alive)continue; const d=d2(a.x,a.z,_r.x,_r.z); if(d<bd){bd=d;r=_r;} }
@@ -1327,7 +1386,7 @@ function tickEnemies(dt){
     if(e.boss){ disposeGroup(e.view.g); if(e.labelEl)e.labelEl.remove();
       burst(e.x,e.z,0xffd24a,40,60,10); for(let i=0;i<6;i++)burst(e.x+rnd(-22,22),e.z+rnd(-22,22),0xff6a3a,10,40,rnd(2,14));
       G.food=Math.min(_foodCap,G.food+30); G.sand+=20; G.wood+=15; G.rocks+=10;
-      floatText(e.x,12,e.z,'🏆 BOSS DOWN!','#ffd24a'); ticker('🏆 Boss defeated! Huge loot for the colony (+food, sand, wood, rocks).','#ffd24a'); G.shake=Math.min(4,(G.shake||0)+2); }
+      floatText(e.x,12,e.z,'🏆 BOSS DOWN!','#ffd24a'); ticker('🏆 Boss defeated! Huge loot for the colony (+food, sand, wood, rocks).','#ffd24a'); SND.bossDown(); G.shake=Math.min(4,(G.shake||0)+2); }
     return false; } return true; });
 }
 
@@ -1346,7 +1405,7 @@ function tickCritters(dt){
     else critterWander(c,dt,c.spd);
     clampTerr(c);
     // caught by any ant that touches it → food for the colony
-    if(near&&bd<6){ c.alive=false; const gain=rndI(5,9); G.food=Math.min(_foodCap,G.food+gain); floatText(c.x,8,c.z,'+'+gain,'#9ad84c'); burst(c.x,c.z,0x9ad84c,8); }
+    if(near&&bd<6){ c.alive=false; const gain=rndI(5,9); G.food=Math.min(_foodCap,G.food+gain); floatText(c.x,8,c.z,'+'+gain,'#9ad84c'); burst(c.x,c.z,0x9ad84c,8); SND.nom(); }
   }
   G.critters=G.critters.filter(c=>{ if(!c.alive){scene.remove(c.view.g);disposeGroup(c.view.g);return false;} return true; });
 }
@@ -1358,7 +1417,7 @@ function tickSpiders(dt){
     // hunt nearest ant in aggro range
     let a=null,bd=1e9; for(const _a of G.ants){if(!_a.alive)continue;const d=d2(s.x,s.z,_a.x,_a.z);if(d<bd){bd=d;a=_a;}}
     if(a&&bd<aggro){
-      if(bd<8){ if(s.atkCd<=0){ a.hp-=s.atk+(night?3:0); a.flash=1; s.atkCd=.9; burst(a.x,a.z,0x7a2a7a,4);
+      if(bd<8){ if(s.atkCd<=0){ a.hp-=s.atk+(night?3:0); a.flash=1; s.atkCd=.9; burst(a.x,a.z,0x7a2a7a,4); SND.bite();
         if(a.hp<=0){ a.alive=false; if(a.fetchEgg)a.fetchEgg.claimed=null; if(a.carryEgg){a.carryEgg.carrier=null;a.carryEgg.claimed=null;a.carryEgg.x=G.nest.x;a.carryEgg.z=G.nest.z;a.carryEgg.y=12;} scene.remove(a.view.g);disposeGroup(a.view.g);burst(a.x,a.z,0xcc3322,8);const i=G.ants.indexOf(a);if(i>=0)G.ants.splice(i,1); } } }
       else moveTo(s,a.x,a.z,s.spd,dt,6);
     } else {
@@ -1402,7 +1461,7 @@ function tickDragonflies(dt){
         tx=e.x; ty=6; tz=e.z; sp=185;
         if(d2(df.x,df.z,e.x,e.z)<9 && df.y<13){
           e.hp-=rndI(15,22)+(G.upgrades.dragonfly||0)*6; e.flash=1; df.atkCd=1.2;
-          burst(e.x,e.z,0x8fe0d0,9); G.shake=Math.min(2,(G.shake||0)+.3);
+          burst(e.x,e.z,0x8fe0d0,9); SND.whoosh(); SND.hit(); G.shake=Math.min(2,(G.shake||0)+.3);
           if(e.hp<=0){ e.alive=false; burst(e.x,e.z,0xcc3322,12); floatText(e.x,6,e.z,'down!','#8fe0d0'); }
         }
       } else {
@@ -1435,7 +1494,7 @@ function fireRock(b,tx,tz){
   const rock=new THREE.Mesh(G_,new THREE.MeshStandardMaterial({color:0x7a7a82,roughness:.95}));
   rock.scale.setScalar(2.2); rock.castShadow=true; rock.position.set(b.x,18,b.z); scene.add(rock);
   G.projectiles.push({sx:b.x,sz:b.z,tx,tz,t:0,dur:0.72,mesh:rock});
-  b.fire=1;                                   // trigger arm swing (animated in sync)
+  b.fire=1; SND.catapult();                   // trigger arm swing (animated in sync)
 }
 function tickCatapults(dt){
   for(const b of builtOf('catapult')){
@@ -1457,7 +1516,7 @@ function tickProjectiles(dt){
     if(u>=1){
       // impact: splash damage to every enemy near the landing point
       burst(pr.tx,pr.tz,0x9a7a4a,16,34,4); for(let k=0;k<6;k++)burst(pr.tx+rnd(-SPLASH_R,SPLASH_R),pr.tz+rnd(-SPLASH_R,SPLASH_R),0x8a8a90,2,10,2);
-      G.shake=Math.min(3,(G.shake||0)+.6);
+      G.shake=Math.min(3,(G.shake||0)+.6); SND.boom();
       const up=(G.upgrades.catapult||0), SR=SPLASH_R+up*4;
       for(const e of G.enemies){ if(!e.alive)continue; if(d2(pr.tx,pr.tz,e.x,e.z)<SR){ e.hp-=rndI(18,28)+up*6; e.flash=1; if(e.hp<=0){e.alive=false;burst(e.x,e.z,0xcc3322,12);floatText(e.x,6,e.z,'down!','#c89a5a');} } }
       scene.remove(pr.mesh); pr.mesh.material.dispose(); G.projectiles.splice(i,1);
@@ -1489,7 +1548,7 @@ function tickColony(dt){
     }
   }
   if(!destFull)G._capMsg=null;
-  for(let i=G.hatch.length-1;i>=0;i--){ const h=G.hatch[i]; h.t-=dt; if(h.t<=0){ addAnt(h.kind,h.x,h.z); burst(h.x,h.z,0xf5b842,8); floatText(h.x,8,h.z,'🐜 hatched!','#f5b842'); if(h.labelEl)h.labelEl.remove(); G.hatch.splice(i,1); } }
+  for(let i=G.hatch.length-1;i>=0;i--){ const h=G.hatch[i]; h.t-=dt; if(h.t<=0){ addAnt(h.kind,h.x,h.z); burst(h.x,h.z,0xf5b842,8); floatText(h.x,8,h.z,'🐜 hatched!','#f5b842'); SND.hatch(); if(h.labelEl)h.labelEl.remove(); G.hatch.splice(i,1); } }
   G.food=Math.min(_foodCap,G.food+builtOf('fungus').length*2*dt);
   // upkeep disabled in test mode
   if(builtOf('barracks').length>0)for(const a of G.ants){if(a.alive&&a.role==='soldier')a.hp=Math.min(a.maxHp,a.hp+5*dt);}
@@ -1506,7 +1565,7 @@ function wakeRival(r){ if(r.awake||!r.alive)return; r.awake=true; r.raidTimer=5;
 function reviveRival(r){ r.alive=true; r.level++; r.maxHp=120+r.level*45; r.hp=r.maxHp; r.awake=true; r.raidTimer=Math.max(8,22-r.level*1.5);
   r.view.scale.set(1,1,1); r.view.traverse(o=>{if(o.isMesh&&o.userData.origMat)o.material=o.userData.origMat;});
   burst(r.x,r.z,0xcc3322,16,40,8); ticker('A rival colony has rebuilt, stronger (Lv '+r.level+').','#f0a890'); }
-function crushRival(r){ r.alive=false; r.respawn=20; r.awake=false;
+function crushRival(r){ r.alive=false; r.respawn=20; r.awake=false; SND.rivalDown();
   burst(r.x,r.z,0xf5b842,30,50,10); for(let i=0;i<5;i++) burst(r.x+rnd(-18,18),r.z+rnd(-18,18),0xcc3322,10,40,rnd(2,16));
   r.view.scale.y=0.14; const deadMat=new THREE.MeshStandardMaterial({color:0x111109,roughness:1}); r.view.traverse(o=>{if(o.isMesh)o.material=deadMat;});
   r.dzone.visible=false;
@@ -1524,7 +1583,7 @@ function tickRivals(dt){
       continue;
     }
     r.raidTimer-=dt; const interval=Math.max(8,22-r.level*1.5);
-    if(r.raidTimer<=3 && !r.raidWarn){ r.raidWarn=true; ticker('Rival raiders approaching!','#e06050'); }
+    if(r.raidTimer<=3 && !r.raidWarn){ r.raidWarn=true; SND.alarm(); ticker('Rival raiders approaching!','#e06050'); }
     if(r.raidTimer<=0){ const n=1+Math.floor(r.level*0.8+Math.random()*1.5); for(let i=0;i<n;i++)setTimeout(()=>{if(G&&!G.over&&r.alive)spawnRaider(r);},i*300); r.raidTimer=interval; r.raidWarn=false; }
   }
 }
@@ -1533,17 +1592,17 @@ function tickBosses(dt){
   if(G.region<2)return;
   if(G.enemies.some(e=>e.boss&&e.alive)){ if(G.bossTimer<60)G.bossTimer=60; return; }
   G.bossTimer-=dt;
-  if(G.bossTimer<=8 && !G.bossWarn){ G.bossWarn=true; ticker('⚠️ The ground trembles — a huge beast is coming! Ready your catapults and soldiers.','#ff6a3a'); }
+  if(G.bossTimer<=8 && !G.bossWarn){ G.bossWarn=true; SND.alarm(); ticker('⚠️ The ground trembles — a huge beast is coming! Ready your catapults and soldiers.','#ff6a3a'); }
   if(G.bossTimer<=0){
     const lvl=Math.max(1,G.region-1);
     const x=clamp(frontierX(G.region)-50,WMIN+50,WMAX-50), z=clamp(frontierZ(G.region)+50,WMIN+50,WMAX-50);
-    addBoss(x,z,lvl); G.bossTimer=110; G.bossWarn=false; goToWar();
+    addBoss(x,z,lvl); G.bossTimer=110; G.bossWarn=false; goToWar(); SND.bossRoar();
     ticker('🐞 A BOSS has entered the world! Rally everyone to defend the queen!','#ff3b30'); G.shake=Math.min(4,(G.shake||0)+2);
   }
 }
 
 // ---------- build placement ----------
-function finishBuild(b){ burst(b.x,b.z,0xf5b842,10); ticker(b.kind+' complete!','#7bc455');
+function finishBuild(b){ burst(b.x,b.z,0xf5b842,10); SND.build(); ticker(b.kind+' complete!','#7bc455');
   if(b.kind==='nursery'||b.kind==='barracks'){const lel=document.createElement('div');lel.className='float';lel.style.fontSize='.65rem';lel.style.pointerEvents='none';labels.appendChild(lel);b.labelEl=lel;}
   if(b.kind==='perch') spawnDragonfly(b);
   if(b.kind==='catapult') ticker('Catapult ready! It flings rocks at enemies in range.','#e0b060');
@@ -1565,7 +1624,7 @@ function placeBuild(kind,wx,wz){
   v.g.traverse(o=>{ if(o.isMesh){ o.userData.solid=o.material; o.material=M.ghost; o.castShadow=false; } });
   v.g.position.set(gx,0,gz); scene.add(v.g);
   G.builds.push({kind,x:gx,z:gz,gx,gz,built:false,prog:0,hp:kind==='wall'?60:100,view:v});
-  ticker(kind+' placed. Ants will build it.','#cdb070'); updateHUD();
+  SND.place(); ticker(kind+' placed. Ants will build it.','#cdb070'); updateHUD();
 }
 
 // ---------- effects on build completion: restore solids ----------
@@ -1824,16 +1883,20 @@ document.getElementById('sel-sol').onclick=()=>{ if(!G)return; G.sel=G.ants.filt
 document.getElementById('replay').onclick=startGame;
 document.getElementById('splash-btn').onclick=()=>{
   const sp=document.getElementById('splash');
+  SND.resume(); SND.startMusic();
   destroyCinematic();
   sp.classList.add('hidden');
   setTimeout(()=>{document.body.classList.remove('splash-active');startGame();},500);
 };
 document.getElementById('splash-continue').onclick=()=>{
   const sp=document.getElementById('splash');
+  SND.resume(); SND.startMusic();
   destroyCinematic();
   sp.classList.add('hidden');
   setTimeout(()=>{document.body.classList.remove('splash-active');loadProgress();},500);
 };
+(function(){ const mb=document.getElementById('mute-btn'); function refresh(){ mb.textContent=SND.isMuted()?'🔇':'🔊'; }
+  refresh(); mb.onclick=()=>{ SND.resume(); SND.setMuted(!SND.isMuted()); if(!SND.isMuted())SND.startMusic(); refresh(); }; })();
 document.getElementById('save-btn').onclick=()=>{ if(G&&!G.over)saveProgress(false); };
 document.getElementById('upg-btn').onclick=openUpgrades;
 document.getElementById('upclose').onclick=()=>document.getElementById('upwrap').classList.remove('show');
@@ -1873,11 +1936,11 @@ function updateBanner(){ if(!G)return;
   document.getElementById('btime').textContent=isNight()?'🌙 Night':'☀️ Day';
 }
 function checkEnd(){ if(G.over)return;
-  if(G.rivals.length>0 && G.rivals.every(r=>!r.alive)){ G.over=true;
+  if(G.rivals.length>0 && G.rivals.every(r=>!r.alive)){ G.over=true; SND.victory();
     burst(G.nest.x,G.nest.z,0xffd24a,40,60,12); for(let i=0;i<8;i++)burst(G.nest.x+rnd(-30,30),G.nest.z+rnd(-30,30),0x9be86a,10,40,rnd(4,16));
     over('🏆 Victory!','You crushed every rival colony at once — the whole world is yours!','#ffd24a'); return; }
-  if(G.queen.hp<=0){G.over=true;over('The queen has fallen','Without her the colony scatters. Build a stronger guard next time.','#cc3322');return;}
-  if(G.ants.filter(a=>a.alive).length<=0&&G.eggs.length<=0&&G.hatch.length<=0){G.over=true;over('Colony lost','No ants remain. Keep some safe at home next time.','#cc3322');}
+  if(G.queen.hp<=0){G.over=true;SND.defeat();over('The queen has fallen','Without her the colony scatters. Build a stronger guard next time.','#cc3322');return;}
+  if(G.ants.filter(a=>a.alive).length<=0&&G.eggs.length<=0&&G.hatch.length<=0){G.over=true;SND.defeat();over('Colony lost','No ants remain. Keep some safe at home next time.','#cc3322');}
 }
 function over(t,m,c){
   clearSave(); updateContinueBtn();   // a lost colony can't be continued
